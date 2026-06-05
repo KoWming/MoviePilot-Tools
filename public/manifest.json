@@ -1,0 +1,83 @@
+{
+  "name": "MoviePilot Tools",
+  "description": "MoviePilot- 支持站点同步、下载管理、数据统计等功能的浏览器扩展",
+  "version": "1.0.0",
+  "manifest_version": 3,
+  "action": {
+    "default_title": "MoviePilot Tools",
+    "default_popup": "src/popup/index.html"
+  },
+  "background": {
+    "service_worker": "assets/background.js",
+    "type": "module"
+  },
+  "host_permissions": [
+    "https://*/*",
+    "http://*/*"
+  ],
+  "permissions": [
+    "storage",
+    "scripting",
+    "offscreen",
+    "contextMenus",
+    "alarms",
+    "cookies",
+    "activeTab"
+  ],
+  "content_scripts": [
+    {
+      "matches": [
+        "http://*/*",
+        "https://*/*"
+      ],
+      "js": [
+        "assets/mp-bridge.js"
+      ],
+      "run_at": "document_idle",
+      "all_frames": true
+    },
+    {
+      "matches": [
+        "http://*/*",
+        "https://*/*"
+      ],
+      "js": [
+        "assets/pt-float.js"
+      ],
+      "run_at": "document_idle"
+    },
+    {
+      "matches": [
+        "http://*/*",
+        "https://*/*"
+      ],
+      "js": [
+        "assets/captcha-auto-fill.js"
+      ],
+      "run_at": "document_idle"
+    }
+  ],
+  "icons": {
+    "16": "icons/icon.png",
+    "48": "icons/icon.png",
+    "128": "icons/icon.png"
+  },
+  "content_security_policy": {
+    "extension_pages": "script-src 'self' 'wasm-unsafe-eval'; object-src 'self';"
+  },
+  "web_accessible_resources": [
+    {
+      "resources": [
+        "icons/*",
+        "assets/mp-bridge.js",
+        "assets/pt-float.js",
+        "assets/captcha-auto-fill.js",
+        "ocr/*"
+      ],
+      "matches": [
+        "http://*/*",
+        "https://*/*"
+      ]
+    }
+  ]
+}

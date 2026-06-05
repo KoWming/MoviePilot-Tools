@@ -1,0 +1,96 @@
+name: 构建与发布
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: 构建并发布浏览器扩展
+    runs-on: windows-latest
+
+    steps:
+      - name: 拉取仓库代码
+        uses: actions/checkout@v4
+
+      - name: 安装 Node.js 环境
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'npm'
+
+      - name: 安装依赖
+        run: npm ci
+
+      - name: 创建发布目录并还原私钥
+        shell: pwsh
+        env:
+          CRX_PRIVATE_KEY: ${{ secrets.CRX_PRIVATE_KEY }}
+        run: |
+          New-Item -ItemType Directory -Force -Path release
+          if ($env:CRX_PRIVATE_KEY) {
+            Set-Content -Path release/moviepilot-tools.pem -Value $env:CRX_PRIVATE_KEY -NoNewline
+            Write-Host "Private key restored from secrets."
+          } else {
+            Write-Host "No CRX_PRIVATE_KEY secret found. A new key will be auto-generated for CRX packaging."
+          }
+
+      - name: 构建并打包扩展程序
+        run: npm run build
+
+      - name: 上传构建产物 (GitHub Actions)
+        uses: actions/upload-artifact@v4
+        with:
+          name: extension-build
+          path: |
+            release/*.zip
+            release/*.crx
+
+      - name: 生成版本更新说明
+        id: release_notes
+        shell: pwsh
+        run: |
+          # Read version and history from version.json
+          $versionInfo = Get-Content -Raw -Path version.json | ConvertFrom-Json
+          $version = $versionInfo.version
+          Write-Host "Detected version from version.json: $version"
+          echo "version=$version" >> $env:GITHUB_OUTPUT
+          
+          $notes = ""
+          if ($versionInfo.history) {
+            if ($versionInfo.history.PSObject.Properties["v$version"]) {
+              $notes = $versionInfo.history."v$version"
+            } elseif ($versionInfo.history.PSObject.Properties[$version]) {
+              $notes = $versionInfo.history.$version
+            }
+          }
+          
+          if (-not $notes) {
+            $notes = "Release version $version"
+          }
+          
+          # Write to release_notes.md
+          Set-Content -Path release_notes.md -Value $notes -Encoding utf8
+          Write-Host "Generated release notes:"
+          Write-Host $notes
+
+      - name: 创建 GitHub Release 发布版本
+        if: startsWith(github.ref, 'refs/tags/v') || github.event_name == 'workflow_dispatch'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ startsWith(github.ref, 'refs/tags/v') && github.ref_name || format('v{0}', steps.release_notes.outputs.version) }}
+          name: MoviePilot Tools ${{ startsWith(github.ref, 'refs/tags/v') && github.ref_name || format('v{0}', steps.release_notes.outputs.version) }}
+          body_path: release_notes.md
+          files: |
+            release/*.zip
+            release/*.crx
+          draft: false
+          prerelease: false
+          fail_on_unmatched_files: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
