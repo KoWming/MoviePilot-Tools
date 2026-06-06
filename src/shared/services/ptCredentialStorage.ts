@@ -9,6 +9,7 @@ export interface PTCredential {
   name?: string;
   createdAt: string;
   updatedAt: string;
+  category?: 'pt' | 'custom';
 }
 
 export interface PTCredentialsConfig {
@@ -58,7 +59,7 @@ export class PTCredentialStorageService {
   /**
    * 添加或更新凭据
    */
-  static async addOrUpdateCredential(domain: string, username: string, password: string, name?: string): Promise<void> {
+  static async addOrUpdateCredential(domain: string, username: string, password: string, name?: string, category?: 'pt' | 'custom'): Promise<void> {
     const creds = await this.getCredentials();
     const d = domain.toLowerCase().trim();
     const index = creds.findIndex(c => c.domain.toLowerCase().trim() === d);
@@ -71,6 +72,7 @@ export class PTCredentialStorageService {
         username,
         password,
         name: name || creds[index].name,
+        category: category !== undefined ? category : creds[index].category,
         updatedAt: now
       };
     } else {
@@ -81,6 +83,7 @@ export class PTCredentialStorageService {
         username,
         password,
         name,
+        category,
         createdAt: now,
         updatedAt: now
       });

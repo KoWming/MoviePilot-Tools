@@ -101,7 +101,7 @@
         <Sites v-else-if="view==='sites'" />
         <SiteManagement v-else-if="view==='site-management'" />
         <TOTPManager v-else-if="view==='totp-manager'" />
-        <PTCredsManager v-else-if="view==='pt-creds-manager'" />
+        <CredsManager v-else-if="view==='pt-creds-manager'" />
         <PluginManager v-else-if="view==='plugin-manager'" />
         <DownloadManager v-else-if="view==='download-manager'" />
         <Settings v-else-if="view==='settings'" @navigate="onNavigate" />
@@ -122,7 +122,7 @@ import User from './views/User.vue';
 import Sites from './views/Sites.vue';
 import SiteManagement from './views/SiteManagement.vue';
 import TOTPManager from './views/TOTPManager.vue';
-import PTCredsManager from './views/PTCredsManager.vue';
+import CredsManager from './views/CredsManager.vue';
 import PluginManager from './views/PluginManager.vue';
 import DownloadManager from './views/DownloadManager.vue';
 import Settings from './views/Settings.vue';
@@ -394,7 +394,7 @@ const currentTitle = computed(() => {
     case 'site-management': return '站点管理';
     case 'dashboard': return '用户信息';
     case 'totp-manager': return '两步验证';
-    case 'pt-creds-manager': return 'PT 账号管理';
+    case 'pt-creds-manager': return '凭据管理';
     case 'plugin-manager': return '插件管理';
     case 'download-manager': return '下载管理';
     case 'settings': return '设置';
@@ -488,7 +488,7 @@ html.has-custom-bg-body, body.has-custom-bg-body, .has-custom-bg-body #app {
 .popup-root.has-custom-bg .user-root,
 .popup-root.has-custom-bg .sites-root,
 .popup-root.has-custom-bg .pt-manager-root,
-.popup-root.has-custom-bg .totp-root,
+.popup-root.has-custom-bg .totp-manager,
 .popup-root.has-custom-bg .download-root,
 .popup-root.has-custom-bg .plugin-root,
 .popup-root.has-custom-bg .about-root,
@@ -547,7 +547,6 @@ html.has-custom-bg-body, body.has-custom-bg-body, .has-custom-bg-body #app {
 .popup-root.has-custom-bg .ov-card,
 .popup-root.has-custom-bg .download-card,
 .popup-root.has-custom-bg .comprehensive-card,
-.popup-root.has-custom-bg .refresh-status,
 .popup-root.has-custom-bg .site-management .toolbar {
   background: rgba(255, 255, 255, 0.45) !important;
   backdrop-filter: blur(12px) saturate(110%);
@@ -556,13 +555,48 @@ html.has-custom-bg-body, body.has-custom-bg-body, .has-custom-bg-body #app {
   box-shadow: 0 4px 16px rgba(0, 0, 0, 0.05) !important;
 }
 
-/* Make PT manager toolbar transparent under custom background */
-.popup-root.has-custom-bg .pt-manager-root .toolbar {
+/* Make PT manager and TOTP manager toolbars transparent under custom background */
+.popup-root.has-custom-bg .pt-manager-root .toolbar,
+.popup-root.has-custom-bg .totp-manager .toolbar {
   background: transparent !important;
   border: none !important;
   box-shadow: none !important;
   backdrop-filter: none !important;
   -webkit-backdrop-filter: none !important;
+}
+
+/* Make TOTP manager tabs transparent and cohesive under custom background */
+.popup-root.has-custom-bg .totp-tabs {
+  background: rgba(255, 255, 255, 0.18) !important;
+  backdrop-filter: blur(10px) saturate(110%);
+  -webkit-backdrop-filter: blur(10px) saturate(110%);
+  border-bottom-color: rgba(255, 255, 255, 0.15) !important;
+}
+.popup-root.has-custom-bg .totp-tab-item {
+  color: rgba(15, 23, 42, 0.6) !important;
+}
+.popup-root.has-custom-bg .totp-tab-item:hover {
+  color: #0f172a !important;
+}
+.popup-root.has-custom-bg .totp-tab-item.active {
+  color: #1677ff !important;
+}
+
+/* Make PT manager tabs transparent and cohesive under custom background */
+.popup-root.has-custom-bg .pt-tabs {
+  background: rgba(255, 255, 255, 0.18) !important;
+  backdrop-filter: blur(10px) saturate(110%);
+  -webkit-backdrop-filter: blur(10px) saturate(110%);
+  border-bottom-color: rgba(255, 255, 255, 0.15) !important;
+}
+.popup-root.has-custom-bg .pt-tab-item {
+  color: rgba(15, 23, 42, 0.6) !important;
+}
+.popup-root.has-custom-bg .pt-tab-item:hover {
+  color: #0f172a !important;
+}
+.popup-root.has-custom-bg .pt-tab-item.active {
+  color: #16a34a !important;
 }
 
 /* Semi-transparent background colors for stat-items to retain their original themes */

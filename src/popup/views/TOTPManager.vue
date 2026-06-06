@@ -1,84 +1,97 @@
 <template>
   <div class="totp-manager">
-    <!-- 头部工具栏 -->
+    <!-- Header/Toolbar -->
     <div class="toolbar">
-      <div class="toolbar-row inputs">
-        <el-input 
-          v-model="searchKeyword" 
-          placeholder="搜索站点..." 
-          size="small" 
-          clearable 
-          class="full"
+      <div class="toolbar-row">
+        <el-input
+          v-model="searchKeyword"
+          placeholder="搜索站点..."
+          size="small"
+          clearable
+          class="search-input"
         >
           <template #prefix>
-            <svg viewBox="0 0 24 24" width="16" height="16" class="icon-prefix">
+            <svg viewBox="0 0 24 24" width="14" height="14" class="icon-prefix">
               <path :d="mdiMagnify" />
             </svg>
           </template>
         </el-input>
-        <el-select v-model="sortBy" size="small" class="full">
-          <el-option label="按名称排序" value="name" />
-          <el-option label="按创建时间排序" value="createdAt" />
-          <el-option label="按更新时间排序" value="updatedAt" />
-        </el-select>
-      </div>
-      <div class="toolbar-row actions">
-        <el-button type="primary" class="compact add-button" size="small" @click="showAddDialog = true">
-          <svg viewBox="0 0 24 24" width="16" height="16" class="icon-btn">
+
+        <el-dropdown @command="handleSortCommand" trigger="click">
+          <el-button class="compact sort-button" size="small" title="排序">
+            <svg viewBox="0 0 24 24" width="16" height="16" class="icon-btn-only">
+              <path :d="mdiSortVariant"/>
+            </svg>
+          </el-button>
+          <template #dropdown>
+            <el-dropdown-menu>
+              <el-dropdown-item command="name" :disabled="sortBy === 'name'">按名称排序</el-dropdown-item>
+              <el-dropdown-item command="createdAt" :disabled="sortBy === 'createdAt'">按创建时间排序</el-dropdown-item>
+              <el-dropdown-item command="updatedAt" :disabled="sortBy === 'updatedAt'">按更新时间排序</el-dropdown-item>
+            </el-dropdown-menu>
+          </template>
+        </el-dropdown>
+
+        <el-button class="compact add-button" size="small" type="primary" @click="showAddDialog = true" title="添加站点">
+          <svg viewBox="0 0 24 24" width="16" height="16" class="icon-btn-only">
             <path :d="mdiPlus"/>
-          </svg> 
-          添加站点
+          </svg>
         </el-button>
-        <el-dropdown @command="handleExportCommand" trigger="click" class="dropdown-wrapper">
-          <el-button class="compact" size="small">
-            <svg viewBox="0 0 24 24" width="16" height="16" class="icon-btn">
-              <path :d="mdiExportVariant"/>
-            </svg> 
-            导出
-            <svg viewBox="0 0 24 24" width="12" height="12" class="ml-1" style="transform: rotate(90deg);">
-              <path d="M8.59 16.59L13.17 12 8.59 7.41 10 6l6 6-6 6-1.41-1.41z" fill="currentColor"/>
+
+        <el-dropdown @command="handleMoreCommand" trigger="click">
+          <el-button class="compact more-button" size="small" title="更多操作">
+            <svg viewBox="0 0 24 24" width="16" height="16" class="icon-btn-only">
+              <path :d="mdiDotsVertical"/>
             </svg>
           </el-button>
           <template #dropdown>
             <el-dropdown-menu>
-              <el-dropdown-item command="json">导出本地JSON</el-dropdown-item>
-              <el-dropdown-item command="webdav">导出到WebDav</el-dropdown-item>
+              <el-dropdown-item command="refresh">
+                <div class="dropdown-item-content">
+                  <svg viewBox="0 0 24 24" width="14" height="14" class="mr-1"><path :d="mdiRefresh"/></svg>刷新验证码
+                </div>
+              </el-dropdown-item>
+              <el-dropdown-item command="webdav-export" divided>
+                <div class="dropdown-item-content">
+                  <svg viewBox="0 0 24 24" width="14" height="14" class="mr-1" fill="currentColor"><path :d="mdiCloudUpload"/></svg>备份至 WebDav
+                </div>
+              </el-dropdown-item>
+              <el-dropdown-item command="webdav-import">
+                <div class="dropdown-item-content">
+                  <svg viewBox="0 0 24 24" width="14" height="14" class="mr-1" fill="currentColor"><path :d="mdiCloudDownload"/></svg>从 WebDav 还原
+                </div>
+              </el-dropdown-item>
+              <el-dropdown-item command="json-export" divided>
+                <div class="dropdown-item-content">
+                  <svg viewBox="0 0 24 24" width="14" height="14" class="mr-1"><path :d="mdiExportVariant"/></svg>导出本地 JSON
+                </div>
+              </el-dropdown-item>
+              <el-dropdown-item command="json-import">
+                <div class="dropdown-item-content">
+                  <svg viewBox="0 0 24 24" width="14" height="14" class="mr-1"><path :d="mdiImport"/></svg>导入本地 JSON
+                </div>
+              </el-dropdown-item>
             </el-dropdown-menu>
           </template>
         </el-dropdown>
-        <el-dropdown @command="handleImportCommand" trigger="click" class="dropdown-wrapper">
-          <el-button class="compact" size="small">
-            <svg viewBox="0 0 24 24" width="16" height="16" class="icon-btn">
-              <path :d="mdiImport"/>
-            </svg> 
-            导入
-            <svg viewBox="0 0 24 24" width="12" height="12" class="ml-1" style="transform: rotate(90deg);">
-              <path d="M8.59 16.59L13.17 12 8.59 7.41 10 6l6 6-6 6-1.41-1.41z" fill="currentColor"/>
-            </svg>
-          </el-button>
-          <template #dropdown>
-            <el-dropdown-menu>
-              <el-dropdown-item command="local">导入本地JSON</el-dropdown-item>
-              <el-dropdown-item command="webdav">从WebDav导入</el-dropdown-item>
-            </el-dropdown-menu>
-          </template>
-        </el-dropdown>
-        <el-button class="compact" size="small" @click="refreshCodes">
-          <svg viewBox="0 0 24 24" width="16" height="16" class="icon-btn">
-            <path :d="mdiRefresh"/>
-          </svg> 
-          刷新
-        </el-button>
       </div>
     </div>
 
-    <!-- 全局刷新状态 -->
-    <div class="refresh-status" v-if="sites.length > 0">
-      <div class="time-info">
-        全局刷新剩余时间：<span class="time">{{ remainingTime }}</span>秒
-        <div class="progress">
-          <div class="progress-bar" :style="{ width: `${progress}%` }"></div>
-        </div>
+    <!-- Tab Horizontal Layout -->
+    <div class="totp-tabs" v-if="sites.length > 0">
+      <div 
+        class="totp-tab-item" 
+        :class="{ active: currentTab === 'pt' }" 
+        @click="currentTab = 'pt'"
+      >
+        PT站点
+      </div>
+      <div 
+        class="totp-tab-item" 
+        :class="{ active: currentTab === 'custom' }" 
+        @click="currentTab = 'custom'"
+      >
+        自定义
       </div>
     </div>
 
@@ -94,21 +107,88 @@
       
       <div v-else class="totp-cards">
         <div v-for="site in filteredSites" :key="site.id" class="totp-card">
-          <!-- 卡片头部 -->
-          <div class="card-header">
-            <div class="site-info">
-              <div class="site-name">{{ site.name }}</div>
-              <div class="site-url" v-if="site.url">{{ site.url }}</div>
+          <!-- Card Main (Header & Details & Actions) -->
+          <div class="card-main">
+            <div class="site-avatar" :style="{ background: getTotpSiteIcon(site) ? 'transparent' : getAvatarBg(getDomain(site.url) || site.name) }">
+              <img v-if="getTotpSiteIcon(site)" :src="getTotpSiteIcon(site) || undefined" class="site-icon-img" />
+              <span v-else>{{ getAvatarChar(site.name || getDomain(site.url)) }}</span>
             </div>
-            <div class="created-time">
-              创建: {{ formatDate(site.createdAt) }}
+            <div class="site-details">
+              <div class="site-name" :title="site.name">
+                {{ site.name }}
+              </div>
+              <div class="site-domain link-style" :title="site.url" @click="openSite(site)" v-if="site.url">
+                {{ getDomain(site.url) }}
+              </div>
+              <div class="site-domain" v-else>
+                无链接地址
+              </div>
+            </div>
+            
+            <div class="card-actions">
+              <el-button 
+                size="small" 
+                text 
+                class="action-btn"
+                @click="copyCode(getCodeForSite(site.id))"
+                title="复制验证码"
+              >
+                <svg viewBox="0 0 24 24" width="15" height="15">
+                  <path :d="mdiContentCopy"/>
+                </svg>
+              </el-button>
+              <el-button 
+                size="small" 
+                text 
+                class="action-btn"
+                @click="openSite(site)"
+                title="打开站点"
+                v-if="site.url"
+              >
+                <svg viewBox="0 0 24 24" width="15" height="15">
+                  <path :d="mdiOpenInNew"/>
+                </svg>
+              </el-button>
+              
+              <el-dropdown @command="(cmd: any) => handleCardCommand(cmd, site)" trigger="click">
+                <el-button size="small" text class="action-btn">
+                  <svg viewBox="0 0 24 24" width="15" height="15">
+                    <path :d="mdiDotsVertical"/>
+                  </svg>
+                </el-button>
+                <template #dropdown>
+                  <el-dropdown-menu>
+                    <el-dropdown-item command="edit">
+                      <div class="dropdown-item-content">
+                        <svg viewBox="0 0 24 24" width="14" height="14" class="mr-1"><path :d="mdiPencil"/></svg>编辑站点
+                      </div>
+                    </el-dropdown-item>
+                    <el-dropdown-item command="toggle-category">
+                      <div class="dropdown-item-content">
+                        <svg viewBox="0 0 24 24" width="14" height="14" class="mr-1"><path :d="mdiSwapHorizontal"/></svg>
+                        {{ getSiteCategory(site) === 'pt' ? '移动到自定义' : '移动到PT站点' }}
+                      </div>
+                    </el-dropdown-item>
+                    <el-dropdown-item command="delete" class="delete-menu-item">
+                      <div class="dropdown-item-content text-danger">
+                        <svg viewBox="0 0 24 24" width="14" height="14" class="mr-1"><path :d="mdiDelete"/></svg>删除站点
+                      </div>
+                    </el-dropdown-item>
+                  </el-dropdown-menu>
+                </template>
+              </el-dropdown>
             </div>
           </div>
 
-          <!-- 验证码显示 -->
-          <div class="code-section">
-            <div class="code-display">
-              <span class="code-text" :class="getCodeClass(site.id)">{{ getCodeForSite(site.id) }}</span>
+          <!-- Code Section & Timer Row -->
+          <div class="card-code-row">
+            <div class="code-wrap">
+              <span class="code-label">验证码:</span>
+              <span class="code-value font-mono" :class="getCodeClass(site.id)" @click="copyCode(getCodeForSite(site.id))" title="点击复制验证码">
+                {{ getCodeForSite(site.id) }}
+              </span>
+            </div>
+            <div class="timer-wrap">
               <div class="circular-timer">
                 <svg class="timer-svg" viewBox="0 0 36 36">
                   <path class="timer-bg" d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" />
@@ -121,54 +201,6 @@
                 </svg>
                 <div class="timer-text">{{ getRemainingTimeForSite(site.id) }}</div>
               </div>
-            </div>
-          </div>
-
-          <!-- 卡片底部操作按钮 -->
-          <div class="card-footer">
-            <div class="card-actions">
-              <el-button 
-                size="small" 
-                text 
-                @click="copyCode(getCodeForSite(site.id))"
-                :title="'复制验证码'"
-              >
-                <svg viewBox="0 0 24 24" width="16" height="16">
-                  <path :d="mdiContentCopy"/>
-                </svg>
-              </el-button>
-              <el-button 
-                size="small" 
-                text 
-                @click="openSite(site)"
-                :title="'打开站点'"
-                v-if="site.url"
-              >
-                <svg viewBox="0 0 24 24" width="16" height="16">
-                  <path :d="mdiOpenInNew"/>
-                </svg>
-              </el-button>
-              <el-button 
-                size="small" 
-                text 
-                @click="editSite(site)"
-                :title="'编辑站点'"
-              >
-                <svg viewBox="0 0 24 24" width="16" height="16">
-                  <path :d="mdiPencil"/>
-                </svg>
-              </el-button>
-              <el-button 
-                size="small" 
-                text 
-                @click="deleteSite(site)"
-                :title="'删除站点'"
-                class="delete-btn"
-              >
-                <svg viewBox="0 0 24 24" width="16" height="16">
-                  <path :d="mdiDelete"/>
-                </svg>
-              </el-button>
             </div>
           </div>
         </div>
@@ -188,6 +220,12 @@
         </el-form-item>
         <el-form-item label="站点地址" prop="url">
           <el-input v-model="siteForm.url" placeholder="请输入站点地址（可选）" />
+        </el-form-item>
+        <el-form-item label="选择分组" prop="category">
+          <el-radio-group v-model="siteForm.category">
+            <el-radio value="pt">PT站点</el-radio>
+            <el-radio value="custom">自定义</el-radio>
+          </el-radio-group>
         </el-form-item>
         <el-form-item label="密钥" prop="secret">
           <el-input 
@@ -247,7 +285,7 @@
     </el-dialog>
 
     <!-- WebDav 备份选择导入 -->
-    <el-dialog v-model="showWebDavImportDialog" title="从 WebDav 导入" width="95%" :close-on-click-modal="false">
+    <el-dialog v-model="showWebDavImportDialog" title="从 WebDav 还原" width="95%" :close-on-click-modal="false">
       <div v-loading="webdavImportLoading" class="webdav-import-body">
         <div v-if="webdavBackups.length === 0" class="webdav-empty">
           未找到可用的 TOTP 备份文件
@@ -279,7 +317,7 @@
           :disabled="!selectedWebDavBackupUrl || webdavBackups.length === 0"
           :loading="webdavImporting"
           @click="importSelectedWebDavBackup"
-        >导入</el-button>
+        >还原</el-button>
       </template>
     </el-dialog>
 
@@ -292,12 +330,16 @@ import { ElMessage, ElMessageBox } from 'element-plus';
 import { 
   mdiMagnify, mdiRefresh, mdiPlus, mdiExportVariant, mdiImport,
   mdiContentCopy, mdiOpenInNew, mdiPencil, mdiDelete, mdiShieldKey,
-  mdiQrcodeScan,mdiFileUpload
+  mdiQrcodeScan, mdiFileUpload, mdiSortVariant, mdiDotsVertical,
+  mdiCloudUpload, mdiCloudDownload, mdiSwapHorizontal
 } from '@mdi/js';
 import type { TOTPSite, TOTPCode, TOTPExportData } from '../../shared/types/totp';
 import { TOTPStorageService } from '../../shared/services/totpStorage';
+import { getSiteIcon, SITE_ICONS } from '../../shared/data/siteIcons';
 import { decryptWebDavPassword, decryptWebDavUsername, decryptWebDavUrl } from '../../shared/secureStorage';
 import { decryptTotpBackup, encryptTotpBackup, isTotpBackupEnvelope, loadPtBackupKey, savePtBackupKey } from '../../shared/ptBackupCrypto';
+import { createMpApiClient } from '../../shared/api/client';
+import { getBaseUrl, getToken } from '../../shared/api/auth';
 import { 
   validateSecret, generateTOTP, generateAllCodes, calculateRemainingTime, calculateProgress, parseQRCode
 } from '../../shared/utils/totp';
@@ -306,6 +348,7 @@ import jsQR from 'jsqr';
 // 响应式数据
 const sites = ref<TOTPSite[]>([]);
 const codes = ref<TOTPCode[]>([]);
+const mpSiteIcons = ref<Record<string, string>>({});
 const loading = ref(false);
 const saving = ref(false);
 const searchKeyword = ref('');
@@ -313,6 +356,7 @@ const sortBy = ref('name');
 const remainingTime = ref(30);
 const progress = ref(0);
 const refreshTimer = ref<number | null>(null);
+const currentTab = ref<'pt' | 'custom'>('pt');
 
 // 对话框状态
 const showAddDialog = ref(false);
@@ -331,7 +375,8 @@ const webdavDeleting = ref(false);
 const siteForm = ref({
   name: '',
   url: '',
-  secret: ''
+  secret: '',
+  category: 'pt'
 });
 
 const siteFormRef = ref();
@@ -368,7 +413,7 @@ function decodeName(input?: string): string {
 
 // 计算属性
 const filteredSites = computed(() => {
-  let filtered = sites.value;
+  let filtered = sites.value.filter((site: TOTPSite) => getSiteCategory(site) === currentTab.value);
   
   if (searchKeyword.value) {
     const keyword = searchKeyword.value.toLowerCase();
@@ -533,7 +578,8 @@ const editSite = (site: TOTPSite) => {
   siteForm.value = {
     name: site.name,
     url: site.url || '',
-    secret: site.secret
+    secret: site.secret,
+    category: getSiteCategory(site)
   };
   showAddDialog.value = true;
 };
@@ -766,14 +812,16 @@ const saveSite = async () => {
       await TOTPStorageService.updateSite(editingSite.value.id, {
         name: siteForm.value.name,
         url: siteForm.value.url,
-        secret: siteForm.value.secret
+        secret: siteForm.value.secret,
+        category: siteForm.value.category as any
       });
       ElMessage.success('更新成功');
     } else {
       await TOTPStorageService.addSite({
         name: siteForm.value.name,
         url: siteForm.value.url,
-        secret: siteForm.value.secret
+        secret: siteForm.value.secret,
+        category: siteForm.value.category as any
       });
       ElMessage.success('添加成功');
     }
@@ -795,7 +843,7 @@ const saveSite = async () => {
 const cancelEdit = () => {
   showAddDialog.value = false;
   editingSite.value = null;
-  siteForm.value = { name: '', url: '', secret: '' };
+  siteForm.value = { name: '', url: '', secret: '', category: 'pt' };
   qrPreview.value = '';
   if (siteFormRef.value) {
     siteFormRef.value.resetFields();
@@ -933,15 +981,28 @@ const exportToWebDav = async (data: any, allowKeyPrompt = true) => {
   }
 };
 
-const handleExportCommand = async (command: string) => {
-  try {
-    const data = await TOTPStorageService.exportConfig();
-    
-    if (command === 'webdav') {
-      // 导出到WebDav
+// 排序命令处理
+const handleSortCommand = (command: string) => {
+  sortBy.value = command;
+};
+
+// 更多操作命令处理
+const handleMoreCommand = async (command: string) => {
+  if (command === 'refresh') {
+    await refreshCodes();
+    ElMessage.success('已刷新验证码');
+  } else if (command === 'webdav-export') {
+    try {
+      const data = await TOTPStorageService.exportConfig();
       await exportToWebDav(data);
-    } else {
-      // 导出为加密 JSON 文件
+    } catch (error) {
+      console.error('备份失败:', error);
+    }
+  } else if (command === 'webdav-import') {
+    await openWebDavImportDialog();
+  } else if (command === 'json-export') {
+    try {
+      const data = await TOTPStorageService.exportConfig();
       const backupKey = await requestTotpBackupKey(
         '本地备份密钥',
         '请输入用于加密两步验证配置的备份密钥。本次输入会同步加密保存到设置中的备份密钥，后续无需再次输入。'
@@ -959,10 +1020,12 @@ const handleExportCommand = async (command: string) => {
       a.click();
       URL.revokeObjectURL(url);
       ElMessage.success('导出成功');
+    } catch (error) {
+      console.error('导出失败:', error);
+      ElMessage.error('导出失败');
     }
-  } catch (error) {
-    console.error('导出失败:', error);
-    ElMessage.error('导出失败');
+  } else if (command === 'json-import') {
+    showImportDialog.value = true;
   }
 };
 
@@ -1169,17 +1232,7 @@ const deleteSelectedWebDavBackup = async () => {
   }
 };
 
-// 导入下拉命令处理
-const handleImportCommand = async (command: string) => {
-  if (command === 'local') {
-    // 打开本地 JSON 选择对话框（复用现有导入对话框）
-    showImportDialog.value = true;
-    return;
-  }
-  if (command === 'webdav') {
-    await openWebDavImportDialog();
-  }
-};
+// 已并入 handleMoreCommand 统一处理
 
 const formatDate = (dateString: string): string => {
   return new Date(dateString).toLocaleDateString();
@@ -1199,6 +1252,58 @@ const tryAutoBackupOnChange = async () => {
   }
 };
 
+// 异步拉取 MoviePilot 后端的所有站点图标作为 TOTP 匹配缓存
+async function fetchMpSiteIcons() {
+  try {
+    const client = createMpApiClient({ baseURL: await getBaseUrl(), getToken });
+    const resp = await client.get('/api/v1/site/');
+    const mpSites = Array.isArray(resp.data?.data) ? resp.data.data : (Array.isArray(resp.data) ? resp.data : []);
+    
+    // 分批加载以降低服务器并发压力
+    const batchSize = 8;
+    for (let i = 0; i < mpSites.length; i += batchSize) {
+      const batch = mpSites.slice(i, i + batchSize);
+      await Promise.all(batch.map(async (s: any) => {
+        const siteUrl = s.url || '';
+        const siteId = s.id;
+        if (!siteUrl || !siteId) return;
+
+        const domain = getDomain(siteUrl);
+        if (!domain) return;
+
+        // 本地图标命中则无需再次向后端请求
+        const localIcon = getLocalSiteIcon(domain);
+        if (localIcon) {
+          mpSiteIcons.value[domain] = localIcon;
+          return;
+        }
+
+        try {
+          const iconResp = await client.get(`/api/v1/site/icon/${siteId}`);
+          let iconData = null;
+          if (iconResp.data?.success && typeof iconResp.data?.data?.icon === 'string') {
+            iconData = iconResp.data.data.icon;
+          } else if (typeof iconResp.data?.icon === 'string') {
+            iconData = iconResp.data.icon;
+          } else if (typeof iconResp.data?.data === 'string') {
+            iconData = iconResp.data.data;
+          } else if (typeof iconResp.data === 'string' && iconResp.data.startsWith('data:')) {
+            iconData = iconResp.data;
+          }
+
+          if (typeof iconData === 'string') {
+            mpSiteIcons.value[domain] = iconData;
+          }
+        } catch (err) {
+          console.debug(`Failed to fetch custom icon for ${domain} via MoviePilot API in TOTP:`, err);
+        }
+      }));
+    }
+  } catch (error) {
+    console.debug('Failed to load MoviePilot configured sites in TOTPManager:', error);
+  }
+}
+
 // 生命周期
 onMounted(async () => {
   // 先加载站点数据，确保验证码生成完成后再启动定时器
@@ -1206,6 +1311,7 @@ onMounted(async () => {
   // 立即计算一次，避免首个站点首屏占位
   await refreshCodes();
   startRefreshTimer();
+  fetchMpSiteIcons();
   
   // 监听自动备份闹钟触发
   try {
@@ -1231,119 +1337,311 @@ onUnmounted(() => {
 watch(searchKeyword, () => {
   // 搜索逻辑已在计算属性中处理
 });
+
+const handleCardCommand = async (command: string, site: TOTPSite) => {
+  if (command === 'edit') {
+    editSite(site);
+  } else if (command === 'delete') {
+    deleteSite(site);
+  } else if (command === 'toggle-category') {
+    const currentCat = getSiteCategory(site);
+    const nextCat = currentCat === 'pt' ? 'custom' : 'pt';
+    try {
+      await TOTPStorageService.updateSite(site.id, {
+        category: nextCat
+      });
+      await loadSites();
+      ElMessage.success(`已移动到${nextCat === 'pt' ? 'PT站点' : '自定义'}`);
+    } catch (error) {
+      ElMessage.error('移动失败');
+    }
+  }
+};
+
+function getSiteCategory(site: TOTPSite): 'pt' | 'custom' {
+  if (site.category) return site.category;
+  return site.url ? 'pt' : 'custom';
+}
+
+function getDomain(urlStr?: string): string {
+  if (!urlStr) return '';
+  try {
+    const cleanUrl = urlStr.includes('://') ? urlStr : `https://${urlStr}`;
+    const host = new URL(cleanUrl).hostname;
+    return host.replace(/^www\./i, '');
+  } catch {
+    return (urlStr || '').replace(/^www\./i, '');
+  }
+}
+
+function getAvatarChar(name: string): string {
+  if (!name) return '?';
+  return name.charAt(0).toUpperCase();
+}
+
+function getAvatarBg(domain: string): string {
+  if (!domain) return '#1677ff';
+  const clean = domain.replace(/^www\./i, '');
+  const gradients = [
+    'linear-gradient(135deg, #10b981 0%, #059669 100%)',
+    'linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%)',
+    'linear-gradient(135deg, #8b5cf6 0%, #6d28d9 100%)',
+    'linear-gradient(135deg, #ec4899 0%, #be185d 100%)',
+    'linear-gradient(135deg, #f59e0b 0%, #d97706 100%)',
+    'linear-gradient(135deg, #14b8a6 0%, #0d9488 100%)',
+    'linear-gradient(135deg, #f43f5e 0%, #be123c 100%)',
+    'linear-gradient(135deg, #06b6d4 0%, #0891b2 100%)'
+  ];
+  let hash = 0;
+  for (let i = 0; i < clean.length; i++) {
+    hash = clean.charCodeAt(i) + ((hash << 5) - hash);
+  }
+  const index = Math.abs(hash) % gradients.length;
+  return gradients[index];
+}
+
+// 站点图标（优先本地 Base64，支持子域名自动回滚至主域名匹配）
+function getLocalSiteIcon(domain: string): string | null {
+  try {
+    let icon = getSiteIcon(domain);
+    if (icon) return icon;
+
+    // 自动剥离多级子域名尝试主域名匹配 (如 xp.m-team.io -> m-team.io)
+    const parts = domain.split('.');
+    if (parts.length > 2) {
+      const mainDomain = parts.slice(-2).join('.');
+      icon = getSiteIcon(mainDomain);
+      if (icon) return icon;
+    }
+    return null;
+  } catch {
+    return null;
+  }
+}
+
+function getIconByName(name: string): string | null {
+  if (!name) return null;
+  const cleanName = name.toLowerCase().trim();
+  const cleanNameNormalized = cleanName.replace(/[-_.\s]/g, '');
+
+  // 1. 中文别名/常用缩写映射
+  const aliasMapping: Record<string, string> = {
+    '龙pt': 'longpt',
+    '龙': 'longpt',
+    '馒头': 'm-team',
+    '猫站': 'pterclub',
+    '天空': 'hdsky',
+    '彩虹岛': 'chdbits',
+    '我堡': 'ourbits',
+    '皇后': 'open',
+    '红叶': 'redleaves',
+    '杜比': 'hddolby',
+    '家园': 'hdhome',
+    '蝴蝶': 'hudie',
+    '春天': 'springsunday',
+    '柠檬': 'lemonhd',
+    '大盘': 'hdchina',
+    '海胆': 'haidan',
+    '备胎': 'beitai',
+    '魂': 'soulvoice',
+    '影客': 'keepfrds',
+    '不可说': 'hdchina',
+    '学校': 'discfan',
+    '教育网': 'tjupt',
+    '北邮': 'byr',
+    '六维': '6v',
+    '52': '52pt',
+    '他留': 'totheglory',
+    '听歌': 'open',
+    '高清晰': 'hdchina'
+  };
+
+  for (const [alias, prefix] of Object.entries(aliasMapping)) {
+    if (cleanName.includes(alias)) {
+      const icon = SITE_ICONS[prefix];
+      if (icon) return icon;
+    }
+  }
+
+  // 2. 遍历 SITE_ICONS 的 Key 进行去符号匹配
+  const keys = Object.keys(SITE_ICONS).sort((a, b) => b.length - a.length);
+  for (const key of keys) {
+    const cleanKey = key.replace(/[-_.\s]/g, '');
+    if (cleanKey.length >= 3 && cleanNameNormalized.includes(cleanKey)) {
+      const icon = SITE_ICONS[key];
+      if (icon) return icon;
+    }
+  }
+
+  return null;
+}
+
+function getTotpSiteIcon(site: TOTPSite): string | null {
+  if (site.url) {
+    const domain = getDomain(site.url);
+    if (domain) {
+      // 1. 优先从 MoviePilot 后端拉取的自定义图标缓存中匹配
+      if (mpSiteIcons.value[domain]) {
+        return mpSiteIcons.value[domain];
+      }
+      // 2. 本地 Base64 预设图标匹配
+      const icon = getLocalSiteIcon(domain);
+      if (icon) return icon;
+    }
+  }
+  
+  // 3. 本地图标未命中，通过站点别名/Key进行模糊匹配
+  const nameIcon = getIconByName(site.name);
+  if (nameIcon) return nameIcon;
+
+  // 4. 模糊匹配 MoviePilot 动态图标缓存
+  // 例如 site.name 为 "LongPT" 且没有 URL，可以正向模糊匹配 "longpt.org" 的缓存
+  const cleanName = site.name.toLowerCase().trim().replace(/[-_.\s]/g, '');
+  if (cleanName.length >= 3) {
+    for (const [domain, iconData] of Object.entries(mpSiteIcons.value)) {
+      const cleanDomain = domain.split('.')[0].replace(/[-_.\s]/g, '');
+      if (cleanName.includes(cleanDomain) || cleanDomain.includes(cleanName)) {
+        return iconData;
+      }
+    }
+  }
+
+  return null;
+}
 </script>
 
 <style scoped>
 .totp-manager {
-  width: 100%;
-  padding: 8px;
-  box-sizing: border-box;
-  height: 100%;
-  overflow-y: auto;
-}
-
-.toolbar {
   display: flex;
   flex-direction: column;
-  gap: 3px;
-  margin-bottom: 6px;
+  height: 100%;
+  background: #f8fafc;
+}
+
+.totp-tabs {
+  display: flex;
+  background: #ffffff;
+  border-bottom: 1px solid #e2e8f0;
+  padding: 0 8px;
+  flex-shrink: 0;
+}
+
+.totp-tab-item {
+  padding: 10px 16px;
+  font-size: 13px;
+  font-weight: 500;
+  color: #64748b;
+  cursor: pointer;
+  position: relative;
+  transition: color 0.15s ease;
+  user-select: none;
+}
+
+.totp-tab-item:hover {
+  color: #0f172a;
+}
+
+.totp-tab-item.active {
+  color: #1677ff;
+  font-weight: 600;
+}
+
+.totp-tab-item.active::after {
+  content: '';
+  position: absolute;
+  bottom: -1px;
+  left: 16px;
+  right: 16px;
+  height: 2px;
+  background: #1677ff;
+  border-radius: 2px 2px 0 0;
+}
+
+/* Toolbar Styling */
+.toolbar {
+  padding: 10px 8px;
+  background: #ffffff;
+  border-bottom: 1px solid #e2e8f0;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.02);
 }
 
 .toolbar-row {
   display: flex;
-  gap: 6px;
-  margin-bottom: 6px;
-}
-
-.toolbar-row.inputs {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 6px;
-}
-
-.toolbar-row.inputs .full {
+  gap: 8px;
+  align-items: center;
   width: 100%;
 }
 
-.toolbar-row.inputs .full :deep(.el-input__wrapper) {
-  height: 30px;
-}
-
-.toolbar-row.inputs .full :deep(.el-select__wrapper) {
-  height: 30px;
-}
-
-.toolbar-row.actions {
-  display: flex;
-  gap: 0px;
-  align-items: center;
-  flex-shrink: 0;
-  flex-wrap: nowrap;
-  justify-content: space-between;
-}
-
-.full {
+.search-input {
   flex: 1;
+}
+
+.search-input :deep(.el-input__wrapper) {
+  border-radius: 8px;
+  box-shadow: 0 0 0 1px #e2e8f0 inset;
+  background: #f8fafc;
+  transition: all 0.2s ease;
+}
+
+.search-input :deep(.el-input__wrapper.is-focus) {
+  box-shadow: 0 0 0 1px #1677ff inset !important;
+  background: #ffffff;
 }
 
 .compact {
-  white-space: nowrap;
-  font-size: 12px;
-  padding: 6px 6px;
-  height: 30px;
-  min-width: auto;
-  width: auto;
-  flex: 1;
-  margin-left: 5px;
-}
-
-.compact:first-child {
-  margin-left: 0;
-}
-
-.compact :deep(.el-button__text) {
-  white-space: nowrap;
-}
-
-.compact svg {
-  fill: currentColor;
-  color: inherit;
-}
-
-.compact :deep(.el-button) {
-  color: inherit;
-}
-
-.compact :deep(.el-button svg) {
-  fill: currentColor;
-  color: inherit;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  border: 1px solid #e2e8f0;
+  background: #ffffff;
+  color: #475569;
+  transition: all 0.2s ease;
 }
 
 .add-button {
-  background-color: #3b82f6 !important;
-  border-color: #3b82f6 !important;
-  color: white !important;
+  background: #1677ff;
+  border-color: #1677ff;
+  color: #ffffff;
 }
 
 .add-button:hover {
-  background-color: #2563eb !important;
-  border-color: #2563eb !important;
+  background: #0050b3;
+  border-color: #0050b3;
+  color: #ffffff;
 }
 
-.add-button :deep(.el-button) {
-  background-color: #3b82f6 !important;
-  border-color: #3b82f6 !important;
-  color: white !important;
+.more-button:hover, .sort-button:hover {
+  background: #f1f5f9;
+  border-color: #cbd5e1;
+  color: #0f172a;
 }
 
-.add-button :deep(.el-button:hover) {
-  background-color: #2563eb !important;
-  border-color: #2563eb !important;
+.icon-prefix {
+  color: #64748b;
 }
 
-.add-button svg {
-  fill: white !important;
-  color: white !important;
+.icon-btn-only {
+  width: 16px;
+  height: 16px;
+  fill: currentColor;
+}
+
+.dropdown-item-content {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+}
+
+.mr-1 {
+  width: 14px;
+  height: 14px;
+  fill: currentColor;
 }
 
 .webdav-import-body {
@@ -1457,12 +1755,7 @@ watch(searchKeyword, () => {
 }
 
 
-.refresh-status {
-  margin-bottom: 6px;
-  padding: 12px;
-  background: rgba(0, 0, 0, 0.05);
-  border-radius: 8px;
-}
+/* .refresh-status has been removed */
 
 .time-info {
   text-align: center;
@@ -1491,6 +1784,9 @@ watch(searchKeyword, () => {
 }
 
 .totp-grid {
+  flex: 1;
+  overflow-y: auto;
+  padding: 8px;
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
   gap: 12px;
@@ -1514,129 +1810,173 @@ watch(searchKeyword, () => {
 }
 
 .totp-cards {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
-  gap: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
 }
 
 .totp-card {
-  border: 1px solid rgba(0, 0, 0, 0.06);
   border-radius: 12px;
-  padding: 10px;
-  background: white;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
-  transition: all 0.3s ease;
-  height: fit-content;
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.02);
+  padding: 12px;
   display: flex;
   flex-direction: column;
+  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 .totp-card:hover {
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
-  transform: translateY(-2px);
+  border-color: rgba(22, 119, 255, 0.3);
+  box-shadow: 0 4px 12px rgba(22, 119, 255, 0.06), 0 1px 3px rgba(0, 0, 0, 0.02);
+  transform: translateY(-1px);
 }
 
-.card-header {
+.card-main {
   display: flex;
-  justify-content: space-between;
-  align-items: flex-start;
-  margin-bottom: 6px;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
 }
 
-.created-time {
-  font-size: 11px;
-  color: #999;
-  white-space: nowrap;
+.site-avatar {
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #ffffff;
+  font-weight: 700;
+  font-size: 16px;
+  flex-shrink: 0;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+  overflow: hidden;
 }
 
-.site-info {
+.site-icon-img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  border-radius: inherit;
+}
+
+.site-details {
   flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
 }
 
 .site-name {
-  font-size: 16px;
-  font-weight: bold;
-  color: #333;
-  margin-bottom: 4px;
+  font-size: 13px;
+  font-weight: 600;
+  color: #0f172a;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  width: 100%;
+  text-align: left;
 }
 
-.site-url {
-  font-size: 12px;
-  color: #666;
-  word-break: break-all;
+.site-domain {
+  font-size: 11px;
+  color: #64748b;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  width: 100%;
+  text-align: left;
+}
+
+.site-domain.link-style {
+  color: #1677ff;
+  cursor: pointer;
+}
+
+.site-domain.link-style:hover {
+  text-decoration: underline;
+  color: #0050b3;
 }
 
 .card-actions {
   display: flex;
-  gap: 2px;
-  align-items: center;
+  gap: 0;
+  border-radius: 6px;
+  overflow: hidden;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
 }
 
-.card-actions .el-button {
-  color: #666 !important;
-  transition: all 0.2s ease;
-  padding: 4px !important;
-  min-width: 24px !important;
-  height: 24px !important;
+.action-btn {
+  padding: 6px 8px !important;
+  height: 28px !important;
   border: none !important;
   background: transparent !important;
+  color: #475569 !important;
+  border-radius: 0 !important;
+  margin: 0 !important;
+  transition: all 0.15s ease;
 }
 
-.card-actions .el-button:hover {
-  color: #409eff !important;
-  background: rgba(64, 158, 255, 0.1) !important;
+.action-btn:hover {
+  background: #f1f5f9 !important;
+  color: #1677ff !important;
 }
 
-.card-actions .el-button svg {
-  fill: currentColor !important;
-  width: 14px !important;
-  height: 14px !important;
+.text-danger {
+  color: #ef4444;
 }
 
-.card-actions .delete-btn {
-  color: #f56c6c !important;
+.delete-menu-item:hover {
+  background-color: #fef2f2 !important;
+  color: #ef4444 !important;
 }
 
-.card-actions .delete-btn:hover {
-  color: #f56c6c !important;
-  background: rgba(245, 108, 108, 0.1) !important;
-  opacity: 1 !important;
+.card-code-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px dashed #e2e8f0;
+  font-size: 11px;
 }
 
-.card-actions .delete-btn svg {
-  fill: #f56c6c !important;
-}
-
-.code-section {
-  margin-bottom: 4px;
-}
-
-.code-display {
+.code-wrap {
   display: flex;
   align-items: center;
-  justify-content: flex-start;
-  margin-bottom: 2px;
-  gap: 12px;
+  gap: 6px;
 }
 
-.code-text {
-  font-size: 18px;
-  font-weight: bold;
+.code-label {
+  color: #94a3b8;
+}
+
+.code-value {
+  font-size: 16px;
+  font-weight: 700;
+  color: #1677ff;
   font-family: 'Courier New', monospace;
-  color: #409eff;
-  letter-spacing: 1px;
-  text-align: left;
-  transition: all 0.3s ease;
+  cursor: pointer;
+  transition: color 0.15s ease;
 }
 
-.code-text.loading {
-  color: #999;
+.code-value:hover {
+  color: #0050b3;
+}
+
+.code-value.loading {
+  color: #94a3b8;
   opacity: 0.7;
   animation: pulse 1.5s ease-in-out infinite;
 }
 
-.code-text.error {
-  color: #f56c6c;
+.code-value.error {
+  color: #ef4444;
   opacity: 0.8;
 }
 
@@ -1647,15 +1987,6 @@ watch(searchKeyword, () => {
   50% {
     opacity: 1;
   }
-}
-
-.code-progress {
-  width: 100%;
-  height: 3px;
-  background: rgba(0, 0, 0, 0.1);
-  border-radius: 2px;
-  overflow: hidden;
-  margin-top: 8px;
 }
 
 .circular-timer {
@@ -1679,7 +2010,7 @@ watch(searchKeyword, () => {
 
 .timer-progress {
   fill: none;
-  stroke: #409eff;
+  stroke: #1677ff;
   stroke-width: 3;
   stroke-linecap: round;
   transition: stroke-dasharray 0.3s ease;
@@ -1692,7 +2023,7 @@ watch(searchKeyword, () => {
   transform: translate(-50%, -50%);
   font-size: 8px;
   font-weight: bold;
-  color: #409eff;
+  color: #1677ff;
 }
 
 .card-footer {

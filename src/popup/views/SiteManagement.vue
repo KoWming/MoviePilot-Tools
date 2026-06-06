@@ -2,13 +2,13 @@
   <div class="site-management">
     <!-- 统计面板 -->
     <div class="stats-panel">
+      <div class="stat-item stat-supporting">
+        <div class="stat-number">{{ supportingCount }}</div>
+        <div class="stat-label">已适配</div>
+      </div>
       <div class="stat-item stat-config">
         <div class="stat-number">{{ sites.length }}</div>
         <div class="stat-label">已配置</div>
-      </div>
-      <div class="stat-item stat-enabled">
-        <div class="stat-number">{{ enabledSitesCount }}</div>
-        <div class="stat-label">已启用</div>
       </div>
       <div class="stat-item stat-filtered">
         <div class="stat-number">{{ filteredSites.length }}</div>
@@ -71,95 +71,116 @@
             'site-disabled': (site as any).isDisabled
           }"
         >
-          <div class="site-header">
-            <div class="site-info">
-              <div class="site-name-row">
-                <div class="site-name">{{ site.name || site.domain || site.url }}</div>
-                <div class="site-tags">
-                  <el-tag v-if="(site as any).isDisabled" type="danger" size="small" class="diff-tag">
-                    已禁用
-                  </el-tag>
-                  <template v-else>
-                    <el-tag v-if="isApiSite(site)" type="success" size="small" class="diff-tag">
-                      无需Cookie
-                    </el-tag>
-                    <template v-else>
-                      <el-tag v-if="site.cookieDiff" type="warning" size="small" class="diff-tag">
-                        Cookie差异
-                      </el-tag>
-                      <el-tag v-if="site.uaDiff" type="info" size="small" class="diff-tag">
-                        UA差异
-                      </el-tag>
-                    </template>
-                  </template>
-                </div>
-              </div>
-              <div class="site-url">{{ site.url }}</div>
+          <!-- 卡片顶行：头像 + 名称/域名 + 标签 + 状态 -->
+          <div class="card-top">
+            <div class="site-avatar" :style="{ background: siteIcons[getDomain(site.url)] ? 'transparent' : getAvatarBg(getDomain(site.url)) }">
+              <img v-if="siteIcons[getDomain(site.url)]" :src="siteIcons[getDomain(site.url)]" class="site-icon-img" />
+              <span v-else>{{ getAvatarChar(site.name || getDomain(site.url)) }}</span>
             </div>
-            <div class="site-status">
-              <el-tag :type="getStatusType(site)" size="small">
-                {{ getStatusText(site) }}
-              </el-tag>
+            <div class="site-info">
+              <div class="site-name" :title="site.name || getDomain(site.url)">
+                {{ site.name || getDomain(site.url) }}
+              </div>
+              <div class="site-domain" v-if="site.url" :title="site.url" @click="openSiteLink(site.url)">
+                <svg viewBox="0 0 24 24" width="9" height="9"><path :d="mdiOpenInNew"/></svg>
+                {{ getDomain(site.url) }}
+              </div>
+            </div>
+            <div class="card-top-tags" v-if="(site as any).isDisabled || isApiSite(site) || site.cookieDiff || site.uaDiff">
+              <template v-if="(site as any).isDisabled">
+                <span class="tag tag-disabled">已禁用</span>
+              </template>
+              <template v-else-if="isApiSite(site)">
+                <span class="tag tag-api">无需 Cookie</span>
+              </template>
+              <template v-else>
+                <span v-if="site.cookieDiff" class="tag tag-cookie">Cookie 差异</span>
+                <span v-if="site.uaDiff" class="tag tag-ua">UA 差异</span>
+              </template>
             </div>
           </div>
-          
-          <div class="site-actions">
-            <!-- 覆盖按钮：只在有服务器Cookie且与浏览器不同时显示，且站点未被禁用，且不是API站点 -->
-            <el-button 
-              v-if="site.cookie && site.cookieDiff && !(site as any).isDisabled && !isApiSite(site)" 
-              size="small" 
-              type="danger" 
-              title="将服务器Cookie覆盖到浏览器"
-              @click="overwriteCookie(site)"
-            >
-              覆盖
-            </el-button>
-            <!-- 更新按钮：只在有差异且有浏览器Cookie时显示，且站点未被禁用，且不是API站点 -->
-            <el-button 
-              v-if="(site.cookieDiff || site.uaDiff) && !(site as any).isDisabled && !isApiSite(site) && hasBrowserCookie(site)" 
-              size="small" 
-              type="primary" 
-              title="更新Cookie和UserAgent到服务器"
-              @click="updateSite(site)"
-            >
-              更新
-            </el-button>
-            <!-- 登录按钮：只在没有浏览器Cookie且有差异时显示，且站点未被禁用，且不是API站点 -->
-            <el-button 
-              v-if="(site.cookieDiff || site.uaDiff) && !(site as any).isDisabled && !isApiSite(site) && !hasBrowserCookie(site)" 
-              size="small" 
-              type="success" 
-              title="前往站点登录"
-              @click="openSiteLogin(site)"
-            >
-              登录
-            </el-button>
-            <!-- 菜单按钮：始终显示 -->
-            <el-dropdown @command="handleMenuCommand" trigger="click">
-              <el-button size="small" circle>
-                <svg viewBox="0 0 24 24" width="16" height="16"><path :d="mdiDotsVertical"/></svg>
+
+          <!-- 卡片底行：操作按钮（左）+ 更多（右） -->
+          <div class="card-bottom">
+            <div class="actions">
+              <!-- 覆盖按钮 -->
+              <el-button
+                v-if="site.cookie && site.cookieDiff && !(site as any).isDisabled && !isApiSite(site)"
+                size="small"
+                class="act-btn act-overwrite"
+                title="将服务器Cookie覆盖到浏览器"
+                @click="overwriteCookie(site)"
+              >
+                <svg viewBox="0 0 24 24" width="10" height="10"><path :d="mdiDownload"/></svg>
+                覆盖
               </el-button>
-              <template #dropdown>
-                <el-dropdown-menu>
-                  <el-dropdown-item :command="{action: 'test', site}">
-                    <svg viewBox="0 0 24 24" width="14" height="14" class="menu-icon"><path :d="mdiWifi"/></svg>
-                    测试
-                  </el-dropdown-item>
-                  <el-dropdown-item :command="{action: 'edit', site}">
-                    <svg viewBox="0 0 24 24" width="14" height="14" class="menu-icon"><path :d="mdiPencil"/></svg>
-                    编辑
-                  </el-dropdown-item>
-                  <el-dropdown-item :command="{action: 'toggleDisable', site}">
-                    <svg viewBox="0 0 24 24" width="14" height="14" class="menu-icon"><path :d="mdiUpload"/></svg>
-                    {{ (site as any).isDisabled ? '开启' : '禁用' }}
-                  </el-dropdown-item>
-                  <el-dropdown-item :command="{action: 'delete', site}" divided>
-                    <svg viewBox="0 0 24 24" width="14" height="14" class="menu-icon"><path :d="mdiDelete"/></svg>
-                    删除
-                  </el-dropdown-item>
-                </el-dropdown-menu>
-              </template>
-            </el-dropdown>
+              <!-- 更新按钮 -->
+              <el-button
+                v-if="(site.cookieDiff || site.uaDiff) && !(site as any).isDisabled && !isApiSite(site) && hasBrowserCookie(site)"
+                size="small"
+                class="act-btn act-update"
+                title="更新Cookie和UserAgent到服务器"
+                @click="updateSite(site)"
+              >
+                <svg viewBox="0 0 24 24" width="10" height="10"><path :d="mdiUpload"/></svg>
+                更新
+              </el-button>
+              <!-- 登录按钮 -->
+              <el-button
+                v-if="(site.cookieDiff || site.uaDiff) && !(site as any).isDisabled && !isApiSite(site) && !hasBrowserCookie(site)"
+                size="small"
+                class="act-btn act-login"
+                title="前往站点登录"
+                @click="openSiteLogin(site)"
+              >
+                <svg viewBox="0 0 24 24" width="10" height="10"><path :d="mdiLock"/></svg>
+                登录
+              </el-button>
+            </div>
+            <div class="more-wrap">
+              <!-- 更多操作下拉 -->
+              <el-dropdown @command="handleMenuCommand" trigger="click">
+                <button class="act-more" type="button">
+                  <svg viewBox="0 0 24 24" width="13" height="13"><path :d="mdiDotsVertical"/></svg>
+                </button>
+                <template #dropdown>
+                  <el-dropdown-menu>
+                    <el-dropdown-item :command="{action: 'test', site}">
+                      <div class="dropdown-item-content">
+                        <svg viewBox="0 0 24 24" width="13" height="13" class="mr-1"><path :d="mdiWifi"/></svg>测试连接
+                      </div>
+                    </el-dropdown-item>
+                    <el-dropdown-item :command="{action: 'edit', site}">
+                      <div class="dropdown-item-content">
+                        <svg viewBox="0 0 24 24" width="13" height="13" class="mr-1"><path :d="mdiPencil"/></svg>编辑站点
+                      </div>
+                    </el-dropdown-item>
+                    <el-dropdown-item :command="{action: 'toggleDisable', site}">
+                      <div class="dropdown-item-content">
+                        <svg viewBox="0 0 24 24" width="13" height="13" class="mr-1"><path :d="mdiUpload"/></svg>
+                        {{ (site as any).isDisabled ? '开启站点' : '禁用站点' }}
+                      </div>
+                    </el-dropdown-item>
+                    <el-dropdown-item :command="{action: 'toggleUpdateDisable', site}">
+                      <div class="dropdown-item-content">
+                        <svg viewBox="0 0 24 24" width="13" height="13" class="mr-1"><path :d="mdiUploadOff"/></svg>
+                        {{ (site as any).isUpdateDisabled ? '启用一键更新' : '禁用一键更新' }}
+                      </div>
+                    </el-dropdown-item>
+                    <el-dropdown-item :command="{action: 'delete', site}" divided class="delete-menu-item">
+                      <div class="dropdown-item-content text-danger">
+                        <svg viewBox="0 0 24 24" width="13" height="13" class="mr-1"><path :d="mdiDelete"/></svg>删除站点
+                      </div>
+                    </el-dropdown-item>
+                    <el-dropdown-item :command="{action: 'clearBrowserCookie', site}" class="delete-menu-item">
+                      <div class="dropdown-item-content text-danger">
+                        <svg viewBox="0 0 24 24" width="13" height="13" class="mr-1"><path :d="mdiCookie"/></svg>删除浏览器Cookie
+                      </div>
+                    </el-dropdown-item>
+                  </el-dropdown-menu>
+                </template>
+              </el-dropdown>
+            </div>
           </div>
         </div>
       </div>
@@ -415,21 +436,24 @@ import {
   mdiPencil, mdiDelete, mdiOpenInNew, mdiUpload,
   mdiRss, mdiPriorityHigh, mdiToggleSwitch, mdiTimer,
   mdiDownload, mdiCookie, mdiApi, mdiKey,
-  mdiDotsVertical, mdiAccount
+  mdiDotsVertical, mdiAccount, mdiLock, mdiUploadOff
 } from '@mdi/js';
 import { createMpApiClient } from '../../shared/api/client';
 import { getBaseUrl, getToken } from '../../shared/api/auth';
 import { updatePendingCount } from '../../shared/stores/siteStore';
 import type { Site } from '../../shared/types/site';
 import { downloadApi, type DownloaderConf } from '../../shared/api/download';
+import { getSiteIcon } from '../../shared/data/siteIcons';
 
 // 响应式数据
 const loading = ref(false);
 const submitting = ref(false);
 const sites = ref<Site[]>([]);
+const siteIcons = ref<Record<string, string>>({});
 const showAddDialog = ref(false);
 const editingSite = ref<Site | null>(null);
 const downloaderOptions = ref<DownloaderConf[]>([]);
+const supportingCount = ref(0);
 
 
 
@@ -459,6 +483,106 @@ const diffCache = ref<{
 }>({});
 
 
+
+// 辅助函数
+function getDomain(url?: string): string {
+  if (!url) return '';
+  try {
+    const host = new URL(url).hostname;
+    return host.replace(/^www\./i, '');
+  } catch {
+    return url.replace(/^www\./i, '');
+  }
+}
+
+function getAvatarChar(name?: string): string {
+  if (!name) return '?';
+  const clean = name.replace(/^www\./i, '');
+  return clean.charAt(0).toUpperCase();
+}
+
+function getAvatarBg(name?: string): string {
+  if (!name) return '#3b82f6';
+  const clean = name.replace(/^www\./i, '');
+  const gradients = [
+    'linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%)',
+    'linear-gradient(135deg, #10b981 0%, #059669 100%)',
+    'linear-gradient(135deg, #8b5cf6 0%, #6d28d9 100%)',
+    'linear-gradient(135deg, #ec4899 0%, #be185d 100%)',
+    'linear-gradient(135deg, #f59e0b 0%, #d97706 100%)',
+    'linear-gradient(135deg, #14b8a6 0%, #0d9488 100%)',
+    'linear-gradient(135deg, #f43f5e 0%, #be123c 100%)',
+    'linear-gradient(135deg, #06b6d4 0%, #0891b2 100%)'
+  ];
+  let hash = 0;
+  for (let i = 0; i < clean.length; i++) {
+    hash = clean.charCodeAt(i) + ((hash << 5) - hash);
+  }
+  const index = Math.abs(hash) % gradients.length;
+  return gradients[index];
+}
+
+function openSiteLink(url?: string) {
+  if (!url) return;
+  try {
+    chrome.tabs.create({ url });
+  } catch {
+    window.open(url, '_blank');
+  }
+}
+
+// 站点图标（优先本地 Base64，支持子域名自动回滚至主域名匹配）
+function getLocalSiteIcon(domain: string): string | null {
+  try {
+    let icon = getSiteIcon(domain);
+    if (icon) return icon;
+
+    // 自动剥离多级子域名尝试主域名匹配 (如 xp.m-team.io -> m-team.io)
+    const parts = domain.split('.');
+    if (parts.length > 2) {
+      const mainDomain = parts.slice(-2).join('.');
+      icon = getSiteIcon(mainDomain);
+      if (icon) return icon;
+    }
+    return null;
+  } catch {
+    return null;
+  }
+}
+
+// 获取站点图标（包括从服务器 API 获取）
+async function fetchSiteIcon(domain: string, siteId: number) {
+  if (!domain || !domain.includes('.')) return;
+
+  // 优先本地图标
+  const localIcon = getLocalSiteIcon(domain);
+  if (localIcon) {
+    siteIcons.value[domain] = localIcon;
+    return;
+  }
+
+  // 本地图标不存在则通过 API 获取
+  const client = createMpApiClient({ baseURL: await getBaseUrl(), getToken });
+  try {
+    const iconResp = await client.get(`/api/v1/site/icon/${siteId}`);
+    let iconData = null;
+    if (iconResp.data?.success && typeof iconResp.data?.data?.icon === 'string') {
+      iconData = iconResp.data.data.icon;
+    } else if (typeof iconResp.data?.icon === 'string') {
+      iconData = iconResp.data.icon;
+    } else if (typeof iconResp.data?.data === 'string') {
+      iconData = iconResp.data.data;
+    } else if (typeof iconResp.data === 'string' && iconResp.data.startsWith('data:')) {
+      iconData = iconResp.data;
+    }
+
+    if (typeof iconData === 'string') {
+      siteIcons.value[domain] = iconData;
+    }
+  } catch (error) {
+    console.error(`Failed to fetch icon for ${domain}:`, error);
+  }
+}
 
 // 计算站点状态 - 使用预计算的状态对象
 function calculateSiteStatus(site: any) {
@@ -548,15 +672,6 @@ const filteredSites = computed(() => {
     // 使用some()方法检查是否匹配任一选中条件
     return activeFilters.some(filter => status[filter as FilterKeys]);
   });
-});
-
-// 已启用站点数量 - 优化计算
-const enabledSitesCount = computed(() => {
-  // 如果正在加载，返回上次的值避免布局变化
-  if (loading.value) {
-    return sites.value.filter(site => site.is_active).length;
-  }
-  return sites.value.filter(site => site.is_active).length;
 });
 
 // 待更新站点数量 - 计算有差异的站点数量
@@ -666,9 +781,9 @@ async function openAllSites() {
 // 更新所有有差异的站点
 async function updateAllSites() {
   try {
-    // 只获取有差异且未被禁用且不是API站点的站点
+    // 只获取有差异且未被禁用、未禁用一键更新且不是API站点的站点
     const sitesWithDiff = filteredSites.value.filter(site => 
-      (site.cookieDiff || site.uaDiff) && !(site as any).isDisabled && !isApiSite(site)
+      (site.cookieDiff || site.uaDiff) && !(site as any).isDisabled && !(site as any).isUpdateDisabled && !isApiSite(site)
     );
     
     if (sitesWithDiff.length === 0) {
@@ -785,11 +900,22 @@ function getStatusType(site: Site) {
 function getStatusText(site: Site) {
   if (!site.is_active) return '停用';
   if (isApiSite(site)) return '正常';
-  if (site.cookieDiff && hasBrowserCookie(site)) return 'Cookie待更新';
-  if (site.cookieDiff && !hasBrowserCookie(site) && site.cookie) return '浏览器未登陆';
-  if (site.uaDiff) return 'UA待更新';
+  if (site.cookieDiff && hasBrowserCookie(site)) return '需要更新';
+  if (site.cookieDiff && !hasBrowserCookie(site) && site.cookie) return '未登录';
+  if (site.uaDiff) return '需要更新';
   if (site.cookie || site.apikey || site.token) return '正常';
   return '需要配置';
+}
+
+// 获取状态徽章样式类
+function getStatusBadgeClass(site: Site) {
+  if (!site.is_active) return 'status-disabled';
+  if (isApiSite(site)) return 'status-normal';
+  if (site.cookieDiff && hasBrowserCookie(site)) return 'status-expired';
+  if (site.cookieDiff && !hasBrowserCookie(site) && site.cookie) return 'status-expired';
+  if (site.uaDiff) return 'status-expired';
+  if (site.cookie || site.apikey || site.token) return 'status-normal';
+  return 'status-danger';
 }
 
 // 检查Cookie差异
@@ -1086,6 +1212,77 @@ async function loadSiteDisableState(site: Site): Promise<boolean> {
   }
 }
 
+// 删除浏览器Cookie
+async function clearBrowserCookie(site: Site) {
+  try {
+    const result = await ElMessageBox.confirm(
+      `确定要删除浏览器中 "${site.name || getDomain(site.url)}" 的Cookie吗？`,
+      '确认删除Cookie',
+      {
+        confirmButtonText: '确定删除',
+        cancelButtonText: '取消',
+        type: 'warning'
+      }
+    );
+
+    if (result === 'confirm') {
+      const domain = new URL(site.url).hostname;
+      const cookies = await chrome.cookies.getAll({ domain });
+      
+      for (const cookie of cookies) {
+        const cookieDomain = cookie.domain.replace(/^\./, '');
+        const removeUrl = `${cookie.secure ? 'https' : 'http'}://${cookieDomain}${cookie.path || '/'}`;
+        await chrome.cookies.remove({ url: removeUrl, name: cookie.name });
+      }
+      
+      // 更新本地状态
+      browserCookieStatus.value[domain] = false;
+      site.cookieDiff = true;
+      
+      ElMessage.success(`已删除 ${site.name || domain} 的 ${cookies.length} 个Cookie`);
+    }
+  } catch (error: any) {
+    if (error !== 'cancel') {
+      console.error('删除浏览器Cookie失败:', error);
+      ElMessage.error(`删除Cookie失败: ${error.message || '未知错误'}`);
+    }
+  }
+}
+
+// 切换站点禁用一键更新状态
+async function toggleUpdateDisable(site: Site) {
+  (site as any).isUpdateDisabled = !(site as any).isUpdateDisabled;
+  const status = (site as any).isUpdateDisabled ? '已禁用一键更新' : '已启用一键更新';
+  await saveSiteUpdateDisableState(site);
+  ElMessage.success(status);
+}
+
+// 保存站点禁用一键更新状态到本地存储
+async function saveSiteUpdateDisableState(site: Site) {
+  try {
+    const domain = new URL(site.url).hostname;
+    const storageKey = `site_update_disable_${domain}`;
+    await chrome.storage.local.set({
+      [storageKey]: (site as any).isUpdateDisabled || false
+    });
+  } catch (error) {
+    console.error('保存禁用一键更新状态失败:', error);
+  }
+}
+
+// 从本地存储加载站点禁用一键更新状态
+async function loadSiteUpdateDisableState(site: Site): Promise<boolean> {
+  try {
+    const domain = new URL(site.url).hostname;
+    const storageKey = `site_update_disable_${domain}`;
+    const result = await chrome.storage.local.get([storageKey]);
+    return (result as any)[storageKey] === true;
+  } catch (error) {
+    console.error('加载禁用一键更新状态失败:', error);
+    return false;
+  }
+}
+
 // 处理菜单命令
 function handleMenuCommand(command: {action: string, site: Site}) {
   const { action, site } = command;
@@ -1099,9 +1296,32 @@ function handleMenuCommand(command: {action: string, site: Site}) {
     case 'toggleDisable':
       toggleSiteDisable(site);
       break;
+    case 'toggleUpdateDisable':
+      toggleUpdateDisable(site);
+      break;
+    case 'clearBrowserCookie':
+      clearBrowserCookie(site);
+      break;
     case 'delete':
       deleteSite(site);
       break;
+  }
+}
+
+// 获取 MP 已适配支持的站点数量
+async function fetchSupportingSites() {
+  try {
+    const baseURL = await getBaseUrl();
+    const client = createMpApiClient({ baseURL, getToken });
+    const response = await client.get('/api/v1/site/supporting');
+    
+    const responseData = response.data;
+    if (responseData && typeof responseData === 'object') {
+      // 接口返回的是对象，键为域名，值为站点信息
+      supportingCount.value = Object.keys(responseData).length;
+    }
+  } catch (error) {
+    console.error('获取支持站点列表失败:', error);
   }
 }
 
@@ -1148,6 +1368,8 @@ async function fetchSites() {
       
       // 加载禁用状态
       const isDisabled = await loadSiteDisableState(site);
+      // 加载禁用一键更新状态
+      const isUpdateDisabled = await loadSiteUpdateDisableState(site);
       
       return {
         ...site,
@@ -1155,6 +1377,7 @@ async function fetchSites() {
         uaDiff,
         browserCookies,
         isDisabled,
+        isUpdateDisabled,
         // 预计算站点状态
         status: {
           browser: !!browserCookies,
@@ -1168,6 +1391,14 @@ async function fetchSites() {
     
     // 设置站点数据
     sites.value = sitesWithStatus;
+
+    // 异步批量获取站点图标（优先本地 Base64，否则从服务器 API 抓取）
+    sitesWithStatus.forEach(site => {
+      if (site.id) {
+        const domain = getDomain(site.url);
+        fetchSiteIcon(domain, site.id);
+      }
+    });
     
     // 更新浏览器Cookie状态缓存
     Object.keys(browserCookiesMap).forEach(domain => {
@@ -1263,7 +1494,7 @@ async function deleteSite(site: Site) {
     );
     
     const client = createMpApiClient({ baseURL: await getBaseUrl(), getToken });
-    const response = await client.delete(`site/${site.id}`);
+    const response = await client.delete(`/api/v1/site/${site.id}`);
     
     const responseData = response.data;
     if (responseData?.success) {
@@ -1309,11 +1540,19 @@ async function saveSite() {
     };
     
     if (editingSite.value) {
-      // 更新站点
-      const response = await client.put('/api/v1/site/', {
+      // 合并原始站点的所有字段，防止漏传导致后端置空覆盖
+      const updateData = {
+        name: editingSite.value.name,
+        public: (editingSite.value as any).public,
+        filter: (editingSite.value as any).filter,
+        note: (editingSite.value as any).note,
+        domain: editingSite.value.domain,
         ...apiData,
         id: editingSite.value.id
-      });
+      };
+      
+      // 更新站点
+      const response = await client.put('/api/v1/site/', updateData);
       
       const responseData = response.data;
       if (responseData?.success) {
@@ -1382,14 +1621,20 @@ function resetForm() {
 // 组件挂载时获取数据
 onMounted(async () => {
   await loadFiltersFromStorage(); // 加载保存的筛选条件
-  // 加载下载器列表
-  try {
-    downloaderOptions.value = await downloadApi.getDownloadClients();
-  } catch (e) {
-    console.warn('获取下载器列表失败:', e);
-    downloaderOptions.value = [];
-  }
-  await fetchSites(); // 直接加载站点数据
+  // 并行加载所有数据
+  await Promise.all([
+    (async () => {
+      // 加载下载器列表
+      try {
+        downloaderOptions.value = await downloadApi.getDownloadClients();
+      } catch (e) {
+        console.warn('获取下载器列表失败:', e);
+        downloaderOptions.value = [];
+      }
+    })(),
+    fetchSites(), // 加载站点数据
+    fetchSupportingSites() // 获取支持的站点数量
+  ]);
 });
 </script>
 
@@ -1438,6 +1683,14 @@ onMounted(async () => {
   font-weight: 500;
 }
 
+/* 已适配站点 - 青色主题 */
+.stat-supporting {
+  background: linear-gradient(135deg, #e0f7fa 0%, #e0f2f1 100%);
+  border-color: #b2ebf2;
+}
+.stat-supporting .stat-number { color: #00838f; }
+.stat-supporting .stat-label { color: #006064; }
+
 /* 已配置站点 - 蓝色主题 */
 .stat-config {
   background: linear-gradient(135deg, #e3f2fd 0%, #f3e5f5 100%);
@@ -1445,14 +1698,6 @@ onMounted(async () => {
 }
 .stat-config .stat-number { color: #1976d2; }
 .stat-config .stat-label { color: #1565c0; }
-
-/* 已启用站点 - 绿色主题 */
-.stat-enabled {
-  background: linear-gradient(135deg, #e8f5e8 0%, #f1f8e9 100%);
-  border-color: #c8e6c9;
-}
-.stat-enabled .stat-number { color: #388e3c; }
-.stat-enabled .stat-label { color: #2e7d32; }
 
 /* 过滤后 - 橙色主题 */
 .stat-filtered {
@@ -1556,6 +1801,44 @@ onMounted(async () => {
   margin-left: 0;
 }
 
+.icon-btn {
+  margin-right: 4px;
+  vertical-align: middle;
+  fill: currentColor;
+  flex-shrink: 0;
+}
+
+.detail-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 6px 0;
+  font-size: 12px;
+  line-height: 1.5;
+  border-bottom: 1px dashed #e2e8f0;
+}
+
+.detail-item:last-child {
+  border-bottom: none;
+}
+
+.detail-item .label {
+  color: #64748b;
+  font-weight: 500;
+}
+
+.detail-item .value {
+  color: #0f172a;
+  font-weight: 600;
+  word-break: break-all;
+}
+
+.site-actions {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
 .empty-state {
   display: flex;
   flex-direction: column;
@@ -1580,164 +1863,362 @@ onMounted(async () => {
 .site-cards {
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 7px;
 }
 
 .site-card {
   background: #fff;
-  border: 1px solid #e5e7eb;
+  border: 1px solid #e2e8f0;
   border-radius: 12px;
-  padding: 16px;
-  transition: all 0.2s;
+  padding: 9px 10px 8px;
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 7px;
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.06), 0 1px 2px rgba(15, 23, 42, 0.04);
+  transition: all 0.22s cubic-bezier(0.4, 0, 0.2, 1);
+  position: relative;
+  overflow: hidden;
 }
 
 .site-card:hover {
-  border-color: #3b82f6;
-  box-shadow: 0 4px 12px rgba(59, 130, 246, 0.1);
+  border-color: rgba(59, 130, 246, 0.2);
+  box-shadow: 0 8px 24px rgba(59, 130, 246, 0.12), 0 2px 8px rgba(59, 130, 246, 0.06);
+  transform: translateY(-1px);
 }
 
 .site-card.site-inactive {
   opacity: 0.7;
-  border-color: #9ca3af;
-  background-color: #f9fafb;
-  color: #6b7280;
 }
 
 .site-card.site-inactive .site-name {
-  color: #6b7280;
+  color: #64748b;
 }
 
-.site-card.site-inactive .site-url {
-  color: #9ca3af;
+.site-card.site-inactive .site-domain {
+  color: #94a3b8;
 }
 
 .site-card.site-disabled {
-  opacity: 0.6;
-  border-color: #fca5a5;
-  background-color: #fef2f2;
-  position: relative;
+  opacity: 0.65;
 }
 
-.site-card.site-disabled::before {
-  content: '';
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background: repeating-linear-gradient(
-    45deg,
-    transparent,
-    transparent 2px,
-    rgba(239, 68, 68, 0.1) 2px,
-    rgba(239, 68, 68, 0.1) 4px
-  );
-  pointer-events: none;
-  border-radius: 12px;
+.site-card.site-disabled .site-avatar {
+  filter: grayscale(1) brightness(0.9);
 }
 
-.site-card.site-disabled .site-name {
-  color: #dc2626;
-}
-
-.site-card.site-disabled .site-url {
-  color: #f87171;
-}
-
-.site-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: flex-start;
-  margin-bottom: 0;
-}
-
-.site-name-row {
+/* 卡片顶行：头像 + 名称/标签 + 状态 */
+.card-top {
   display: flex;
   align-items: center;
-  gap: 8px;
-  margin-bottom: 4px;
+  gap: 9px;
+  flex-wrap: wrap;
 }
 
-.site-tags {
+/* 卡片底行：操作按钮 + 更多 */
+.card-bottom {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding-top: 6px;
+  border-top: 1px dashed rgba(15, 23, 42, 0.08);
+}
+
+.more-wrap {
+  margin-left: auto;
+}
+
+.card-top-tags {
   display: flex;
   gap: 4px;
   flex-wrap: wrap;
 }
 
-.diff-tag {
-  font-size: 10px;
-  padding: 2px 6px;
-  height: auto;
-  line-height: 1.2;
-}
-
-.site-actions {
+/* 头像 */
+.site-avatar {
+  width: 34px;
+  height: 34px;
+  border-radius: 9px;
+  flex-shrink: 0;
   display: flex;
   align-items: center;
-  gap: 8px;
-  margin-top: 12px;
+  justify-content: center;
+  font-size: 15px;
+  font-weight: 700;
+  color: #fff;
+  overflow: hidden;
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.06), 0 1px 2px rgba(15, 23, 42, 0.04);
 }
 
-.menu-icon {
-  margin-right: 4px;
-  fill: currentColor;
+.site-icon-img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  border-radius: inherit;
+}
+
+/* 站点信息 */
+.site-info {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
 }
 
 .site-name {
-  font-size: 14px;
+  font-size: 12.5px;
+  font-weight: 700;
+  color: #0f172a;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  line-height: 1.25;
+}
+
+/* 状态徽章 */
+.status-badge {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  height: 18px;
+  padding: 0 6px;
+  border-radius: 999px;
+  font-size: 9px;
+  font-weight: 700;
+  border: 1px solid transparent;
+}
+
+.status-dot {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+}
+
+.status-normal {
+  background: rgba(16, 185, 129, 0.08);
+  color: #10b981;
+  border-color: rgba(16, 185, 129, 0.2);
+}
+.status-normal .status-dot {
+  background: #10b981;
+  animation: pulse-dot 2s ease-in-out infinite;
+}
+
+.status-expired {
+  background: rgba(245, 158, 11, 0.08);
+  color: #f59e0b;
+  border-color: rgba(245, 158, 11, 0.2);
+}
+.status-expired .status-dot {
+  background: #f59e0b;
+}
+
+.status-danger {
+  background: rgba(239, 68, 68, 0.08);
+  color: #ef4444;
+  border-color: rgba(239, 68, 68, 0.2);
+}
+.status-danger .status-dot {
+  background: #ef4444;
+}
+
+.status-disabled {
+  background: rgba(139, 92, 246, 0.08);
+  color: #8b5cf6;
+  border-color: rgba(139, 92, 246, 0.2);
+}
+.status-disabled .status-dot {
+  background: #8b5cf6;
+}
+
+@keyframes pulse-dot {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.4; }
+}
+
+/* 标签行 */
+.tags-row {
+  display: flex;
+  gap: 4px;
+  flex-wrap: wrap;
+}
+
+.tag {
+  display: inline-flex;
+  align-items: center;
+  height: 16px;
+  padding: 0 5px;
+  border-radius: 4px;
+  font-size: 9px;
+  font-weight: 600;
+  border: 1px solid transparent;
+}
+
+.tag-disabled {
+  background: rgba(239, 68, 68, 0.08);
+  color: #ef4444;
+  border-color: rgba(239, 68, 68, 0.2);
+}
+
+.tag-api {
+  background: rgba(139, 92, 246, 0.08);
+  color: #8b5cf6;
+  border-color: rgba(139, 92, 246, 0.2);
+}
+
+.tag-cookie {
+  background: rgba(245, 158, 11, 0.08);
+  color: #f59e0b;
+  border-color: rgba(245, 158, 11, 0.2);
+}
+
+.tag-ua {
+  background: rgba(59, 130, 246, 0.08);
+  color: #3b82f6;
+  border-color: rgba(59, 130, 246, 0.2);
+}
+
+/* 操作按钮组 */
+.actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.act-btn {
+  height: 24px;
+  padding: 0 10px;
+  border-radius: 6px;
+  font-size: 11px;
   font-weight: 500;
-  color: #1f2937;
-  word-break: break-all;
-  line-height: 1.4;
-  margin-bottom: 4px;
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  margin: 0;
+  transition: all 0.15s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
-.site-url {
-  font-size: 12px;
-  color: #6b7280;
-  word-break: break-all;
-  line-height: 1.3;
-  font-family: 'Courier New', monospace;
+.act-btn svg {
+  fill: currentColor;
 }
 
+.act-update {
+  background: rgba(59, 130, 246, 0.08);
+  color: #60a5fa;
+  border: none;
+}
+.act-update:hover {
+  background: #3b82f6;
+  color: #fff;
+}
+
+.act-overwrite {
+  background: rgba(239, 68, 68, 0.08);
+  color: #f87171;
+  border: none;
+}
+.act-overwrite:hover {
+  background: #ef4444;
+  color: #fff;
+}
+
+.act-login {
+  background: rgba(16, 185, 129, 0.08);
+  color: #34d399;
+  border: none;
+}
+.act-login:hover {
+  background: #10b981;
+  color: #fff;
+}
+
+/* 更多按钮 */
+.more-wrap {
+  position: relative;
+}
+
+.act-more {
+  width: 24px;
+  height: 24px;
+  border-radius: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #f8fafc;
+  border: none;
+  color: #475569;
+  transition: all 0.15s cubic-bezier(0.4, 0, 0.2, 1);
+  cursor: pointer;
+  padding: 0;
+}
+
+.act-more:hover {
+  background: #e2e8f0;
+  color: #0f172a;
+}
+
+.act-more svg {
+  fill: currentColor;
+}
+
+.site-domain {
+  font-size: 10px;
+  color: #3b82f6;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 3px;
+}
+
+.site-domain svg {
+  fill: currentColor;
+  flex-shrink: 0;
+}
+
+.site-domain:hover {
+  text-decoration: underline;
+}
+
+.site-domain.link-style {
+  color: #3b82f6;
+}
+
+.site-domain.link-style:hover {
+  text-decoration: underline;
+  color: #1d4ed8;
+}
+
+/* Legacy compatibility - kept minimal */
 .site-status {
   flex-shrink: 0;
 }
 
-.site-details {
-  margin-bottom: 12px;
-}
 
-.detail-item {
+.dropdown-item-content {
   display: flex;
-  margin-bottom: 4px;
-  font-size: 14px;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
 }
 
-.detail-item .label {
-  color: #6b7280;
-  width: 60px;
-  flex-shrink: 0;
-}
-
-.detail-item .value {
-  color: #1f2937;
-  flex: 1;
-  word-break: break-all;
-}
-
-.site-actions {
-  display: flex;
-  gap: 8px;
-  justify-content: flex-end;
-}
-
-.icon-btn {
+.mr-1 {
+  width: 14px;
+  height: 14px;
   fill: currentColor;
-  margin-right: 4px;
+}
+
+.text-danger,
+:deep(.text-danger) {
+  color: #ef4444;
+}
+
+.delete-menu-item:hover {
+  background-color: #fef2f2 !important;
+  color: #ef4444 !important;
 }
 
 .icon-prefix {
@@ -2200,8 +2681,18 @@ onMounted(async () => {
     min-width: auto;
   }
   
-  .site-actions {
+  .card-bottom {
     flex-wrap: wrap;
+    gap: 4px;
+  }
+
+  .actions {
+    flex-wrap: wrap;
+    gap: 4px;
+  }
+
+  .site-name {
+    max-width: 130px;
   }
   
   :deep(.site-dialog) {

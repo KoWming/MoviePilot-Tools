@@ -70,13 +70,31 @@
       @change="onPtFileSelected"
     />
 
+    <!-- Tab Horizontal Layout -->
+    <div class="pt-tabs" v-if="ptCredsList.length > 0">
+      <div 
+        class="pt-tab-item" 
+        :class="{ active: currentTab === 'pt' }" 
+        @click="currentTab = 'pt'"
+      >
+        PT站点
+      </div>
+      <div 
+        class="pt-tab-item" 
+        :class="{ active: currentTab === 'custom' }" 
+        @click="currentTab = 'custom'"
+      >
+        自定义
+      </div>
+    </div>
+
     <!-- Main List Grid -->
     <div class="pt-grid" v-loading="ptManagerLoading">
       <div v-if="filteredPtCreds.length === 0" class="empty-state">
         <svg viewBox="0 0 24 24" width="48" height="48" class="empty-icon">
           <path :d="mdiKeyOutline"/>
         </svg>
-        <p class="empty-text">暂无 PT 站点凭据</p>
+        <p class="empty-text">暂无站点凭据</p>
         <el-button type="primary" @click="showPtAddEditDialog('add')">添加第一个站点</el-button>
       </div>
 
@@ -84,8 +102,8 @@
         <div v-for="item in filteredPtCreds" :key="item.id" class="pt-card">
           <!-- Card Header & Details -->
           <div class="card-main">
-            <div class="site-avatar" :style="{ background: getSiteIcon(item.domain) ? 'transparent' : getAvatarBg(item.domain) }">
-              <img v-if="getSiteIcon(item.domain)" :src="getSiteIcon(item.domain) || undefined" class="site-icon-img" />
+            <div class="site-avatar" :style="{ background: getLocalSiteIcon(item.domain) ? 'transparent' : getAvatarBg(item.domain) }">
+              <img v-if="getLocalSiteIcon(item.domain)" :src="getLocalSiteIcon(item.domain) || undefined" class="site-icon-img" />
               <span v-else>{{ getAvatarChar(item.name || siteMapping[item.domain] || item.domain) }}</span>
             </div>
             <div class="site-details">
@@ -137,6 +155,12 @@
                         <svg viewBox="0 0 24 24" width="14" height="14" class="mr-1"><path :d="mdiPencil"/></svg>编辑凭据
                       </div>
                     </el-dropdown-item>
+                    <el-dropdown-item command="toggle-category">
+                      <div class="dropdown-item-content">
+                        <svg viewBox="0 0 24 24" width="14" height="14" class="mr-1"><path :d="mdiSwapHorizontal"/></svg>
+                        {{ getCredCategory(item) === 'pt' ? '移动到自定义' : '移动到PT站点' }}
+                      </div>
+                    </el-dropdown-item>
                     <el-dropdown-item command="delete" class="delete-menu-item">
                       <div class="dropdown-item-content text-danger">
                         <svg viewBox="0 0 24 24" width="14" height="14" class="mr-1"><path :d="mdiDelete"/></svg>删除凭据
@@ -165,18 +189,24 @@
       </div>
     </div>
 
-    <!-- PT 账号新增/编辑 Dialog -->
+    <!-- 凭据新增/编辑 Dialog -->
     <el-dialog
       v-model="ptAddEditDialogVisible"
-      :title="ptAddEditMode === 'add' ? '新增 PT 站点凭据' : '编辑 PT 站点凭据'"
+      :title="ptAddEditMode === 'add' ? '新增站点凭据' : '编辑站点凭据'"
       width="95%"
       :close-on-click-modal="false"
       class="pt-dialog-custom"
       @closed="ptCredFormRef?.resetFields()"
     >
-      <el-form :model="ptCredForm" :rules="ptCredRules" ref="ptCredFormRef" label-position="top">
+      <el-form :model="ptCredForm" :rules="ptCredRules" ref="ptCredFormRef" label-width="80px">
         <el-form-item label="站点域名" prop="domain">
           <el-input v-model="ptCredForm.domain" placeholder="例如: m-team.cc" :disabled="ptAddEditMode === 'edit'" />
+        </el-form-item>
+        <el-form-item label="选择分组" prop="category">
+          <el-radio-group v-model="ptCredForm.category">
+            <el-radio value="pt">PT站点</el-radio>
+            <el-radio value="custom">自定义</el-radio>
+          </el-radio-group>
         </el-form-item>
         <el-form-item label="站点名称" prop="name">
           <el-input v-model="ptCredForm.name" placeholder="手动输入或自动关联中文名称" />
@@ -194,7 +224,7 @@
       </template>
     </el-dialog>
 
-    <!-- PT 账号安全 PIN 验证 Dialog -->
+    <!-- 凭据安全 PIN 验证 Dialog -->
     <el-dialog
       v-model="ptPinDialogVisible"
       title="安全验证"
@@ -229,7 +259,7 @@
     <el-dialog v-model="showPtWebDavImportDialog" title="从 WebDav 还原" width="95%" :close-on-click-modal="false">
       <div v-loading="ptWebDavImportLoading" class="webdav-import-body">
         <div v-if="ptWebDavBackups.length === 0" class="webdav-empty">
-          未找到可用的 PT 备份文件
+          未找到可用的备份文件
         </div>
         <el-radio-group v-else v-model="selectedPtWebDavBackupUrl" class="webdav-backup-list">
           <el-radio
@@ -270,7 +300,8 @@ import { ElMessage, ElMessageBox } from 'element-plus';
 import {
   mdiMagnify, mdiPlus, mdiExportVariant, mdiImport, mdiRefresh,
   mdiKeyOutline, mdiPencil, mdiDelete, mdiEye, mdiEyeOff,
-  mdiDotsVertical, mdiContentCopy, mdiCloudUpload, mdiCloudDownload
+  mdiDotsVertical, mdiContentCopy, mdiCloudUpload, mdiCloudDownload,
+  mdiSwapHorizontal
 } from '@mdi/js';
 import { PTCredentialStorageService, type PTCredential } from '../../shared/services/ptCredentialStorage';
 import { isPinSecurityEnabled, verifyPin } from '../../shared/pinSecurity';
@@ -285,6 +316,8 @@ const ptManagerLoading = ref(false);
 const ptCredsList = ref<PTCredential[]>([]);
 const visiblePasswords = reactive<Record<string, boolean>>({});
 const siteMapping = ref<Record<string, string>>({});
+const currentTab = ref<'pt' | 'custom'>('pt');
+const siteIcons = ref<Record<string, string>>({});
 
 // WebDav 备份选择还原状态
 const showPtWebDavImportDialog = ref(false);
@@ -304,7 +337,8 @@ const ptCredForm = reactive({
   domain: '',
   username: '',
   password: '',
-  name: ''
+  name: '',
+  category: 'pt' as 'pt' | 'custom'
 });
 const ptCredFormRef = ref();
 const ptFileInput = ref<HTMLInputElement | null>(null);
@@ -329,9 +363,10 @@ const ptCredRules = {
 };
 
 const filteredPtCreds = computed(() => {
+  const filtered = ptCredsList.value.filter(item => getCredCategory(item) === currentTab.value);
   const kw = ptSearchKeyword.value.toLowerCase().trim();
-  if (!kw) return ptCredsList.value;
-  return ptCredsList.value.filter(item => 
+  if (!kw) return filtered;
+  return filtered.filter(item => 
     (item.name || siteMapping.value[item.domain] || '').toLowerCase().includes(kw) ||
     item.username.toLowerCase().includes(kw)
   );
@@ -415,6 +450,12 @@ async function loadPtCreds() {
   ptManagerLoading.value = true;
   try {
     ptCredsList.value = await PTCredentialStorageService.getCredentials();
+    // 异步获取所有站点图标
+    ptCredsList.value.forEach(cred => {
+      if (cred.domain) {
+        fetchSiteIcon(cred.domain);
+      }
+    });
   } catch (error) {
     ElMessage.error('加载账号凭据失败');
   } finally {
@@ -495,6 +536,7 @@ function showPtAddEditDialog(mode: 'add' | 'edit', item?: PTCredential) {
       ptCredForm.username = item.username;
       ptCredForm.password = item.password;
       ptCredForm.name = item.name || '';
+      ptCredForm.category = getCredCategory(item);
       ptAddEditDialogVisible.value = true;
     });
   } else {
@@ -503,6 +545,7 @@ function showPtAddEditDialog(mode: 'add' | 'edit', item?: PTCredential) {
     ptCredForm.username = '';
     ptCredForm.password = '';
     ptCredForm.name = '';
+    ptCredForm.category = 'pt';
     ptAddEditDialogVisible.value = true;
   }
 }
@@ -519,7 +562,8 @@ async function savePtCredForm() {
       ptCredForm.domain,
       ptCredForm.username,
       ptCredForm.password,
-      ptCredForm.name.trim() || undefined
+      ptCredForm.name.trim() || undefined,
+      ptCredForm.category
     );
     await loadPtCreds();
     ptAddEditDialogVisible.value = false;
@@ -573,6 +617,30 @@ function handleCardCommand(command: string, item: PTCredential) {
     showPtAddEditDialog('edit', item);
   } else if (command === 'delete') {
     handleDeletePtCred(item);
+  } else if (command === 'toggle-category') {
+    toggleCredCategory(item);
+  }
+}
+
+function getCredCategory(item: PTCredential): 'pt' | 'custom' {
+  if (item.category) return item.category;
+  return item.domain ? 'pt' : 'custom';
+}
+
+async function toggleCredCategory(item: PTCredential) {
+  try {
+    const oldCat = getCredCategory(item);
+    const newCat = oldCat === 'pt' ? 'custom' : 'pt';
+    const idx = ptCredsList.value.findIndex(c => c.id === item.id);
+    if (idx !== -1) {
+      ptCredsList.value[idx].category = newCat;
+      ptCredsList.value[idx].updatedAt = new Date().toISOString();
+    }
+    await PTCredentialStorageService.saveCredentials(ptCredsList.value);
+    ElMessage.success(`已移动到${newCat === 'pt' ? 'PT站点' : '自定义'}`);
+    await tryAutoBackupOnPtChange();
+  } catch (error) {
+    ElMessage.error('移动分组失败');
   }
 }
 
@@ -580,13 +648,13 @@ async function exportPtCredsToJson() {
   try {
     const credentials = await PTCredentialStorageService.getCredentials();
     if (credentials.length === 0) {
-      ElMessage.warning('暂无 PT 账号凭据数据可备份');
+      ElMessage.warning('暂无凭据数据可备份');
       return;
     }
 
     const backupKey = await requestPtBackupKey(
       '本地备份密钥',
-      '请输入用于加密 PT 账号凭据的备份密钥。本次输入会同步加密保存到设置中的备份密钥，后续无需再次输入。'
+      '请输入用于加密凭据的备份密钥。本次输入会同步加密保存到设置中的备份密钥，后续无需再次输入。'
     );
     if (!backupKey) {
       ElMessage.warning('已取消导出');
@@ -627,7 +695,7 @@ async function requestPtBackupKey(title: string, message: string, allowPrompt = 
     const key = result.value?.trim() || '';
     if (key) {
       await savePtBackupKey(key);
-      ElMessage.success('PT 备份密钥已加密保存');
+      ElMessage.success('备份密钥已加密保存');
     }
     return key;
   } catch {
@@ -649,7 +717,7 @@ async function decryptPtBackupPayload(payload: unknown): Promise<{ credentials: 
   if (isPtBackupEnvelope(payload)) {
     const backupKey = await requestPtBackupKey(
       'WebDav 备份密钥',
-      '请输入用于解密 PT 账号凭据备份的备份密钥。请确保输入与备份时使用的密钥一致，否则无法成功解密还原数据。'
+      '请输入用于解密凭据备份的备份密钥。请确保输入与备份时使用的密钥一致，否则无法成功解密还原数据。'
     );
     if (!backupKey) throw new Error('已取消输入备份密钥');
     return decryptPtBackup<{ credentials: PTCredential[] }>(payload, backupKey);
@@ -679,13 +747,13 @@ async function exportPtCredsToWebDav(allowKeyPrompt = true) {
 
     const credentials = await PTCredentialStorageService.getCredentials();
     if (credentials.length === 0) {
-      ElMessage.warning('暂无 PT 账号凭据数据可备份');
+      ElMessage.warning('暂无凭据数据可备份');
       return;
     }
 
     const backupKey = await requestPtBackupKey(
       'WebDav 备份密钥',
-      '请输入用于加密 PT 账号凭据的备份密钥。本次输入会同步加密保存到设置中的备份密钥，后续无需再次输入。',
+      '请输入用于加密凭据的备份密钥。本次输入会同步加密保存到设置中的备份密钥，后续无需再次输入。',
       allowKeyPrompt
     );
     if (!backupKey) {
@@ -862,7 +930,7 @@ async function loadPtWebDavBackupList() {
     ptWebDavBackups.value = getSortedPtBackupFiles(files);
     selectedPtWebDavBackupUrl.value = ptWebDavBackups.value[0]?.url || '';
     if (ptWebDavBackups.value.length === 0) {
-      ElMessage.warning('未找到可用的 PT 备份文件');
+      ElMessage.warning('未找到可用的备份文件');
     }
   } catch (error) {
     console.error('加载 PT WebDav 备份列表失败:', error);
@@ -913,6 +981,7 @@ async function importSelectedPtWebDavBackup() {
           username: imp.username,
           password: imp.password,
           name: imp.name || mergedList[idx].name,
+          category: imp.category || mergedList[idx].category || getCredCategory(imp),
           updatedAt: new Date().toISOString()
         };
       } else {
@@ -922,6 +991,7 @@ async function importSelectedPtWebDavBackup() {
           username: imp.username,
           password: imp.password,
           name: imp.name,
+          category: imp.category || getCredCategory(imp),
           createdAt: imp.createdAt || new Date().toISOString(),
           updatedAt: imp.updatedAt || new Date().toISOString()
         });
@@ -1017,6 +1087,7 @@ async function onPtFileSelected(event: Event) {
           username: imp.username,
           password: imp.password,
           name: imp.name || mergedList[idx].name,
+          category: imp.category || mergedList[idx].category || getCredCategory(imp),
           updatedAt: new Date().toISOString()
         };
       } else {
@@ -1026,6 +1097,7 @@ async function onPtFileSelected(event: Event) {
           username: imp.username,
           password: imp.password,
           name: imp.name,
+          category: imp.category || getCredCategory(imp),
           createdAt: new Date().toISOString(),
           updatedAt: new Date().toISOString()
         });
@@ -1077,6 +1149,95 @@ function getAvatarBg(domain: string): string {
   }
   const index = Math.abs(hash) % gradients.length;
   return gradients[index];
+}
+
+// 站点图标（优先本地 Base64，支持子域名自动回滚至主域名匹配）
+function getLocalSiteIcon(domain: string): string | null {
+  try {
+    // 优先检查从服务器获取的图标
+    if (siteIcons.value[domain]) return siteIcons.value[domain];
+    
+    let icon = getSiteIcon(domain);
+    if (icon) return icon;
+
+    // 自动剥离多级子域名尝试主域名匹配 (如 xp.m-team.io -> m-team.io)
+    const parts = domain.split('.');
+    if (parts.length > 2) {
+      const mainDomain = parts.slice(-2).join('.');
+      icon = getSiteIcon(mainDomain);
+      if (icon) return icon;
+    }
+    return null;
+  } catch {
+    return null;
+  }
+}
+
+// 从服务器获取站点图标
+async function fetchSiteIcon(domain: string) {
+  if (!domain || !domain.includes('.')) return;
+
+  // 优先本地图标
+  const localIcon = getLocalSiteIcon(domain);
+  if (localIcon) {
+    siteIcons.value[domain] = localIcon;
+    return;
+  }
+
+  // 本地图标不存在则通过 API 获取
+  try {
+    const baseUrl = await getBaseUrl();
+    const token = await getToken();
+    if (!baseUrl || !token) return;
+    
+    const client = createMpApiClient({ baseURL: baseUrl, getToken });
+    
+    // 先获取站点列表，找到域名对应的站点 ID
+    const sitesResp = await client.get('/api/v1/site/');
+    let sitesData: any[] = [];
+    const responseData = sitesResp.data;
+    if (Array.isArray(responseData)) {
+      sitesData = responseData;
+    } else if (responseData && Array.isArray(responseData.data)) {
+      sitesData = responseData.data;
+    } else if (responseData && Array.isArray(responseData.sites)) {
+      sitesData = responseData.sites;
+    }
+    
+    // 找到匹配域名的站点
+    const site = sitesData.find((s: any) => {
+      try {
+        const siteDomain = new URL(s.url).hostname;
+        return siteDomain === domain || siteDomain.endsWith(`.${domain}`) || domain.endsWith(`.${siteDomain}`);
+      } catch {
+        return false;
+      }
+    });
+    
+    if (!site || !site.id) {
+      console.log(`未找到站点 ${domain} 对应的站点 ID`);
+      return;
+    }
+    
+    // 使用站点 ID 获取图标
+    const iconResp = await client.get(`/api/v1/site/icon/${site.id}`);
+    let iconData = null;
+    if (iconResp.data?.success && typeof iconResp.data?.data?.icon === 'string') {
+      iconData = iconResp.data.data.icon;
+    } else if (typeof iconResp.data?.icon === 'string') {
+      iconData = iconResp.data.icon;
+    } else if (typeof iconResp.data?.data === 'string') {
+      iconData = iconResp.data.data;
+    } else if (typeof iconResp.data === 'string' && iconResp.data.startsWith('data:')) {
+      iconData = iconResp.data;
+    }
+
+    if (typeof iconData === 'string') {
+      siteIcons.value[domain] = iconData;
+    }
+  } catch (error) {
+    console.error(`获取站点图标失败: ${domain}`, error);
+  }
 }
 </script>
 
@@ -1519,5 +1680,45 @@ function getAvatarBg(domain: string): string {
   border-radius: 8px;
   padding: 6px 14px;
   font-size: 12px;
+}
+
+/* Tab 切换区域样式 */
+.pt-tabs {
+  display: flex;
+  background: #ffffff;
+  border-bottom: 1px solid #e2e8f0;
+  padding: 0 8px;
+  flex-shrink: 0;
+}
+
+.pt-tab-item {
+  padding: 10px 16px;
+  font-size: 13px;
+  font-weight: 500;
+  color: #64748b;
+  cursor: pointer;
+  position: relative;
+  transition: color 0.15s ease;
+  user-select: none;
+}
+
+.pt-tab-item:hover {
+  color: #0f172a;
+}
+
+.pt-tab-item.active {
+  color: #16a34a;
+  font-weight: 600;
+}
+
+.pt-tab-item.active::after {
+  content: '';
+  position: absolute;
+  bottom: -1px;
+  left: 16px;
+  right: 16px;
+  height: 2px;
+  background: #16a34a;
+  border-radius: 2px 2px 0 0;
 }
 </style>

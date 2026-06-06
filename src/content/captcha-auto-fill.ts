@@ -407,6 +407,18 @@
       .sort((a, b) => a.getBoundingClientRect().top - b.getBoundingClientRect().top)[0] || null;
   }
 
+  /** 检查输入框是否看起来像单字符输入框（宽度小、maxLength=1、或 inputMode=numeric） */
+  function looksLikeSingleCharInput(input: HTMLInputElement): boolean {
+    // 显式声明为单字符
+    if (input.maxLength === 1 || input.getAttribute('maxlength') === '1') return true;
+    // inputMode=numeric 的短输入框
+    if (input.inputMode === 'numeric' && input.getBoundingClientRect().width <= 96) return true;
+    // 宽度 ≤48px 且高度 ≤64px 的可见输入框（典型的分格输入框尺寸）
+    const rect = input.getBoundingClientRect();
+    if (rect.width > 0 && rect.width <= 48 && rect.height > 0 && rect.height <= 64) return true;
+    return false;
+  }
+
   function findSplitTotpInputs(): HTMLInputElement[] | null {
     const inputs = (Array.from(document.querySelectorAll('input')) as HTMLInputElement[])
       .filter(input => {
@@ -414,7 +426,7 @@
         if (isCaptchaLikeInput(input)) return false;
         const type = (input.type || 'text').toLowerCase();
         if (!['text', 'tel', 'number', 'password'].includes(type)) return false;
-        return input.maxLength === 1 || input.getAttribute('maxlength') === '1' || input.inputMode === 'numeric';
+        return looksLikeSingleCharInput(input);
       });
 
     if (inputs.length < 6) return null;
@@ -461,7 +473,7 @@
   }
 
   function isTotpText(text: string): boolean {
-    return /otp|totp|2fa|mfa|authenticator|google authenticator|two[-_\s]?factor|twofactor|two-step|twostep|两步|二步|双因素|动态|令牌|安全码|一次性/.test(text);
+    return /otp|totp|2fa|mfa|authenticator|google authenticator|two[-_\s]?factor|twofactor|two-step|twostep|两步|二步|双因素|动态|令牌|安全码|一次性|验证器/.test(text);
   }
 
   function hasTotpPageContext(): boolean {
@@ -477,6 +489,11 @@
     if (type === 'search') return true;
     const text = getInputText(input);
     return /search|keyword|keywords|query|q\b|搜索|搜素|关键字|关键词|查找|检索/.test(text);
+  }
+
+  function isChatLikeInput(input: HTMLInputElement): boolean {
+    const text = getInputText(input);
+    return /chat|message|comment|reply|send|msg|消息|聊天|留言|评论|回复|发送|群聊/.test(text);
   }
 
   function isAccountLikeInput(input: HTMLInputElement): boolean {
@@ -519,7 +536,7 @@
       }
       const site = matchTotpSite(sites);
       if (!site) {
-        log('当前页面未匹配到 TOTP 站点:', location.hostname, '可用站点:', sites.map(s => `${s.name}${s.url ? `(${s.url})` : ''}`).join(', '));
+        log('当前页面未匹配到 TOTP 站点:', location.hostname);
         return false;
       }
       const target = findTotpTarget();
@@ -527,11 +544,23 @@
         log('未找到两步验证输入框');
         return false;
       }
+      // 检查输入框是否已有有效的 TOTP 值（6或8位数字）
       if (!Array.isArray(target) && target.value && target.value.trim()) {
-        log('两步验证输入框已有值，停止自动填充');
-        totpFilled = true;
-        stopTotpAutoFill();
-        return false;
+        const existingValue = target.value.trim();
+        const isValidTotp = /^\d{6}(\d{2})?$/.test(existingValue);
+        if (isValidTotp) {
+          log(`两步验证输入框已有有效验证码: ${existingValue}，停止自动填充`);
+          totpFilled = true;
+          stopTotpAutoFill();
+          return false;
+        }
+        // 已有值但不是有效验证码（可能是浏览器填充的密码等），清除后继续填充
+        log(`两步验证输入框已有非验证码值: "${existingValue}"，将覆盖填充`);
+        if (Array.isArray(target)) {
+          target.forEach(input => setInputValue(input, ''));
+        } else {
+          setInputValue(target, '');
+        }
       }
       const code = await generateTotpCode(site.secret);
       fillTotpTarget(target, code);
@@ -653,6 +682,7 @@
   function isLikelyCaptchaImage(image: HTMLImageElement): boolean {
     if (!isVisibleElement(image)) return false;
     const rect = image.getBoundingClientRect();
+    const src = (image.src || '').toLowerCase();
     const text = [
       image.id,
       image.className,
@@ -663,20 +693,27 @@
       image.closest('[role="dialog"], .dialog, .modal, .layui-layer, .ui-dialog, .ajax, form')?.textContent?.slice(0, 500) || ''
     ].join(' ').toLowerCase();
 
-    if (/captcha|verify|vcode|vfcode|seccode|security.?code|验证码|校验码|图片验证|show up/.test(text)) return true;
+    // 排除 favicon、图标、logo 等常见非验证码图片
+    if (/\.(ico|svg|gif)$/i.test(src)) return false;
+    if (/favicon|\/icon[s]?\/|logo|avatar|badge|sprite|emoticon|emoji|smiley/i.test(src)) return false;
+    if (/\.ico$|icon\.png|icon\.jpg|site\.ico|favicon/i.test(src)) return false;
 
+    // 排除非常小的图片（如 16x16、32x32 图标）
     const width = image.naturalWidth || rect.width;
     const height = image.naturalHeight || rect.height;
-    const looksLikeSmallCode = width >= 60 && width <= 260 && height >= 20 && height <= 100;
+    if (width < 60 || height < 20 || width > 400 || height > 200) return false;
+
+    if (/captcha|verify|vcode|vfcode|seccode|security.?code|验证码|校验码|图片验证|show up/.test(text)) return true;
+
     const nearbyInput = findNearbyCaptchaInput(image);
-    return looksLikeSmallCode && !!nearbyInput;
+    return !!nearbyInput;
   }
 
   function findNearbyCaptchaInput(image: HTMLImageElement): HTMLInputElement | null {
     const containers = [
-      image.closest('[role="dialog"], .dialog, .modal, .layui-layer, .ui-dialog, .ajax, form, table, tbody, tr, div'),
+      image.closest('[role="dialog"], .dialog, .modal, .layui-layer, .ui-dialog, .ajax, form'),
       image.parentElement,
-      document.body
+      image.parentElement?.parentElement
     ].filter(Boolean) as Element[];
 
     for (const container of containers) {
@@ -685,7 +722,10 @@
           if (!isVisibleInput(input)) return false;
           const type = (input.type || 'text').toLowerCase();
           if (!['text', 'tel', 'number', 'search', ''].includes(type)) return false;
-          if (isAccountLikeInput(input) || isSearchLikeInput(input)) return false;
+          if (isAccountLikeInput(input) || isSearchLikeInput(input) || isChatLikeInput(input)) return false;
+          // 排除宽度太大的输入框（聊天框等通常很宽）
+          const inputRect = input.getBoundingClientRect();
+          if (inputRect.width > 400) return false;
           return true;
         })
         .sort((a, b) => getElementDistance(image, a) - getElementDistance(image, b));
@@ -894,19 +934,19 @@
 
     const colors = type === 'success'
       ? {
-          accent: '#16a34a',
-          accentSoft: 'rgba(22, 163, 74, .12)',
-          accentLine: 'rgba(22, 163, 74, .72)',
-          title: '#14532d',
-          text: '#166534'
-        }
+        accent: '#16a34a',
+        accentSoft: 'rgba(22, 163, 74, .12)',
+        accentLine: 'rgba(22, 163, 74, .72)',
+        title: '#14532d',
+        text: '#166534'
+      }
       : {
-          accent: '#dc2626',
-          accentSoft: 'rgba(220, 38, 38, .12)',
-          accentLine: 'rgba(220, 38, 38, .72)',
-          title: '#7f1d1d',
-          text: '#991b1b'
-        };
+        accent: '#dc2626',
+        accentSoft: 'rgba(220, 38, 38, .12)',
+        accentLine: 'rgba(220, 38, 38, .72)',
+        title: '#7f1d1d',
+        text: '#991b1b'
+      };
 
     const toast = document.createElement('div');
     toast.id = id;

@@ -192,15 +192,15 @@
           <svg viewBox="0 0 24 24"><path :d="mdiKeyOutline" /></svg>
         </div>
         <div class="section-title-wrap">
-          <div class="section-title">PT 站点账号管理</div>
-          <div class="section-subtitle">管理自动保存与填充的 PT 站点凭据</div>
+          <div class="section-title">凭据管理</div>
+          <div class="section-subtitle">管理自动保存与填充的站点凭据</div>
         </div>
       </div>
 
       <div class="setting-row">
         <div class="setting-main">
           <div class="setting-title">自动保存</div>
-          <div class="setting-desc">启用后，在 PT 站点登录时自动提示保存账号密码。</div>
+          <div class="setting-desc">启用后，在站点登录时自动提示保存账号密码。</div>
         </div>
         <el-switch
           v-model="ptCredsConfig.autoSaveEnabled"
@@ -212,7 +212,7 @@
       <div class="setting-row interval-row">
         <div class="setting-main">
           <div class="setting-title">自动填充</div>
-          <div class="setting-desc">启用后，打开已保存的 PT 站点登录页时自动填充。</div>
+          <div class="setting-desc">启用后，打开已保存的站点登录页时自动填充。</div>
         </div>
         <el-switch
           v-model="ptCredsConfig.autoFillEnabled"
@@ -224,7 +224,7 @@
       <el-form label-position="top" class="webdav-form">
         <el-form-item class="backup-key-item">
           <div class="setting-title">备份密钥</div>
-          <div class="setting-desc">用于加密两步验证和 PT 账号凭据的本地 JSON / WebDav 备份，跨设备还原时需使用相同密钥。</div>
+          <div class="setting-desc">用于加密两步验证和凭据的本地 JSON / WebDav 备份，跨设备还原时需使用相同密钥。</div>
           <el-input
             v-model="ptBackupKeyInput"
             class="backup-key-input"
@@ -250,7 +250,7 @@
         </div>
         <div class="section-title-wrap">
           <div class="section-title">WebDav 备份设置</div>
-          <div class="section-subtitle">配置两步验证和 PT 账号凭据备份使用的 WebDav 信息</div>
+          <div class="section-subtitle">配置两步验证和凭据备份使用的 WebDav 信息</div>
         </div>
       </div>
 
@@ -330,7 +330,7 @@
         <div class="setting-row interval-row">
           <div class="setting-main">
             <div class="setting-title">新增站点时自动备份</div>
-            <div class="setting-desc">新增两步验证站点或 PT 账号凭据后自动备份到 WebDav。</div>
+            <div class="setting-desc">新增两步验证站点或凭据后自动备份到 WebDav。</div>
           </div>
           <el-switch
             v-model="webdavForm.autoOnChange"
@@ -339,7 +339,7 @@
         </div>
 
         <el-alert type="info" :closable="false" class="webdav-tip">
-          提示：需在扩展后台运行时才能按时备份。两步验证和 PT 账号管理页面的“导出到 WebDav”“从 WebDav 导入/还原”会使用这里的配置。
+          提示：需在扩展后台运行时才能按时备份。两步验证和凭据管理页面的“导出到 WebDav”“从 WebDav 导入/还原”会使用这里的配置。
         </el-alert>
 
         <div class="settings-actions">
@@ -728,17 +728,17 @@ function generatePtBackupKeyValue() {
 
 async function savePtBackupKeyValue() {
   const key = ptBackupKeyInput.value.trim();
-  if (!key) { ElMessage.error('请填写或随机生成 PT 备份密钥'); return; }
+  if (!key) { ElMessage.error('请填写或随机生成备份密钥'); return; }
   ptBackupKeySaving.value = true;
   try {
     await savePtBackupKey(key);
     ptBackupKeyRaw.value = key;
     ptBackupKeyPlaceholder.value = desensitize(key);
     ptBackupKeyInput.value = '';
-    ElMessage.success('PT 备份密钥已保存');
+    ElMessage.success('备份密钥已保存');
   } catch (error) {
     await loadPtBackupKeyValue();
-    ElMessage.error((error as Error).message || '保存 PT 备份密钥失败');
+    ElMessage.error((error as Error).message || '保存备份密钥失败');
   } finally {
     ptBackupKeySaving.value = false;
   }
@@ -748,7 +748,7 @@ async function savePtCredsConfigForm() {
   ptCredsSaving.value = true;
   try {
     await PTCredentialStorageService.savePtCredsConfig({ ...ptCredsConfig });
-    ElMessage.success('PT 账号保存与填充设置已更新');
+    ElMessage.success('凭据保存与填充设置已更新');
   } catch (error) {
     await loadPtCredsConfig();
     ElMessage.error((error as Error).message || '保存配置失败');

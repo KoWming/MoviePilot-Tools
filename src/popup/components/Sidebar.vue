@@ -16,7 +16,7 @@
       <button :class="['item', current==='totp-manager' && 'active']" @click="$emit('navigate','totp-manager')" title="两步验证">
         <svg viewBox="0 0 24 24"><path :d="mdiShieldKey"/></svg>
       </button>
-      <button :class="['item', current==='pt-creds-manager' && 'active']" @click="$emit('navigate','pt-creds-manager')" title="PT账号">
+      <button :class="['item', current==='pt-creds-manager' && 'active']" @click="$emit('navigate','pt-creds-manager')" title="凭据管理">
         <svg viewBox="0 0 24 24"><path :d="mdiKeyOutline"/></svg>
       </button>
       <button :class="['item', current==='plugin-manager' && 'active']" @click="$emit('navigate','plugin-manager')" title="插件管理">

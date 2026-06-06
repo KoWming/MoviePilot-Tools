@@ -8,6 +8,7 @@ export interface TOTPSite {
   updatedAt: string;
   icon?: string;
   color?: string;
+  category?: 'pt' | 'custom';
 }
 
 export interface TOTPCode {
