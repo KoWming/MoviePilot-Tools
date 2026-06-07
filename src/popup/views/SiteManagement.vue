@@ -1685,8 +1685,8 @@ onMounted(async () => {
 
 /* 已适配站点 - 青色主题 */
 .stat-supporting {
-  background: linear-gradient(135deg, #e0f7fa 0%, #e0f2f1 100%);
-  border-color: #b2ebf2;
+  background: linear-gradient(135deg, #e0f7fa 0%, #e8f5e9 100%);
+  border-color: #b2dfdb;
 }
 .stat-supporting .stat-number { color: #00838f; }
 .stat-supporting .stat-label { color: #006064; }

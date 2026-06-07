@@ -303,7 +303,7 @@ import {
   mdiDotsVertical, mdiContentCopy, mdiCloudUpload, mdiCloudDownload,
   mdiSwapHorizontal
 } from '@mdi/js';
-import { PTCredentialStorageService, type PTCredential } from '../../shared/services/ptCredentialStorage';
+import { PTCredentialStorageService, type PTCredential } from '../../shared/services/credentialStorage';
 import { isPinSecurityEnabled, verifyPin } from '../../shared/pinSecurity';
 import { decryptWebDavPassword, decryptWebDavUsername, decryptWebDavUrl } from '../../shared/secureStorage';
 import { STORAGE_KEYS } from '../../shared/constants';

@@ -2,6 +2,30 @@
   <div class="settings-root">
     <el-card class="settings-card" shadow="hover">
       <div class="section-header">
+        <div class="section-icon theme-icon">
+          <svg viewBox="0 0 24 24"><path :d="mdiImageOutline" /></svg>
+        </div>
+        <div class="section-title-wrap">
+          <div class="section-title">主题设置</div>
+          <div class="section-subtitle">切换插件外观主题</div>
+        </div>
+      </div>
+
+      <div class="setting-row">
+        <div class="setting-main">
+          <div class="setting-title">主题模式</div>
+          <div class="setting-desc">选择自动跟随系统、浅色或深色主题。</div>
+        </div>
+        <el-radio-group v-model="themeMode" size="small" @change="onThemeChange" class="theme-radio-group">
+          <el-radio-button value="auto">自动</el-radio-button>
+          <el-radio-button value="light">浅色</el-radio-button>
+          <el-radio-button value="dark">深色</el-radio-button>
+        </el-radio-group>
+      </div>
+    </el-card>
+
+    <el-card class="settings-card" shadow="hover">
+      <div class="section-header">
         <div class="section-icon">
           <svg viewBox="0 0 24 24"><path :d="mdiShieldLockOutline" /></svg>
         </div>
@@ -457,16 +481,19 @@
       <div class="setting-row">
         <div class="setting-main">
           <div class="setting-title">使用自定义背景</div>
-          <div class="setting-desc">启用后，插件将使用您设置的自定义背景图片。</div>
+          <div class="setting-desc">
+            <span v-if="themeState.effective === 'dark'" style="color: var(--el-color-danger);">深色主题下自动禁用自定义背景</span>
+            <span v-else>启用后，插件将使用您设置的自定义背景图片。</span>
+          </div>
         </div>
         <el-switch
-          v-model="customBgConfig.enabled"
-          :loading="customBgSaving"
-          @change="saveCustomBgConfig"
-        />
+          :model-value="themeState.effective === 'dark' ? false : customBgConfig.enabled"
+          :disabled="themeState.effective === 'dark' || customBgSaving"
+          @change="onCustomBgEnabledChange"
+        ></el-switch>
       </div>
 
-      <template v-if="customBgConfig.enabled">
+      <template v-if="customBgConfig.enabled && themeState.effective !== 'dark'">
         <div class="setting-row interval-row">
           <div class="setting-main">
             <div class="setting-title">自定义图片</div>
@@ -494,10 +521,14 @@
           </div>
         </div>
 
-        <div class="setting-row interval-row" style="flex-direction: column; align-items: flex-start; gap: 6px;">
-          <div class="setting-title">从 URL 获取</div>
-          <div class="setting-desc">输入网络图片 URL，点击测试以下载并作为背景。</div>
-          <div style="margin-top: 4px; display: flex; gap: 8px; width: 100%;">
+        <div class="setting-row interval-row" style="flex-direction: column; align-items: flex-start; gap: 8px;">
+          <div style="display: flex; justify-content: space-between; width: 100%; align-items: center;">
+            <div class="setting-main">
+              <div class="setting-title">从 URL 获取</div>
+              <div class="setting-desc">输入网络图片 URL，点击测试以下载并作为背景。</div>
+            </div>
+          </div>
+          <div style="display: flex; gap: 8px; width: 100%;">
             <el-input
               v-model="customBgConfig.url"
               placeholder="https://example.com/image.jpg"
@@ -510,6 +541,47 @@
               :loading="testingUrl"
               @click="testBgUrl"
             >测试</el-button>
+          </div>
+        </div>
+
+        <div class="setting-row interval-row">
+          <div class="setting-main">
+            <div class="setting-title">从 MoviePilot 获取壁纸</div>
+            <div class="setting-desc">从 MP 服务器获取壁纸图片作为背景。</div>
+          </div>
+          <div style="display: flex; gap: 6px; align-items: center;">
+            <el-button
+              size="small"
+              type="primary"
+              :loading="fetchingWallpapers"
+              @click="fetchMpWallpapers"
+            >
+              {{ mpWallpapers.length > 0 ? '刷新' : '获取' }}
+            </el-button>
+          </div>
+        </div>
+
+        <div class="setting-row interval-row">
+          <div class="setting-main">
+            <div class="setting-title">自动获取</div>
+            <div class="setting-desc">开启后，每天自动从 MP 获取当日电影海报作为背景。</div>
+          </div>
+          <el-switch
+            v-model="dailyWallpaperEnabled"
+            :loading="fetchingDailyWallpaper"
+            @change="onDailyWallpaperToggle"
+          ></el-switch>
+        </div>
+
+        <div v-if="mpWallpapers.length > 0" class="mp-wallpaper-grid" style="margin-top: 4px;">
+          <div
+            v-for="(wp, idx) in mpWallpapers"
+            :key="idx"
+            class="mp-wallpaper-item"
+            :class="{ 'active': mpWallpapers[idx] === customBgConfig.url }"
+            @click="selectMpWallpaper(wp)"
+          >
+            <img :src="wp" :alt="'壁纸 ' + (idx + 1)" loading="lazy" />
           </div>
         </div>
 
@@ -629,20 +701,30 @@
 
 <script setup lang="ts">
 import { computed, nextTick, onMounted, reactive, ref } from 'vue';
-import { ElMessage, ElMessageBox } from 'element-plus';
+import { ElMessage } from 'element-plus';
 import { mdiCookieRefreshOutline, mdiOpenInNew, mdiShieldLockOutline, mdiWebBox, mdiKeyOutline, mdiImageOutline } from '@mdi/js';
 import { compressAndResizeImage, downloadAndCompressImage, saveCustomBgConfig as saveCustomBgToStorage, saveCustomBgImage as saveCustomBgImageToStorage, clearCustomBgImage } from '../../shared/customBg';
 import { bgStore, updateBgStore } from '../../shared/stores/bgStore';
 import { COOKIE_UA_INTERVAL_PRESETS, getCookieUaAutoUpdateConfig, saveCookieUaAutoUpdateConfig, type CookieUaAutoUpdateConfig } from '../../shared/cookieUaAutoUpdate';
 import { disablePinSecurity, getPinRuleText, getPinSecurityConfig, getPinVerifyFrequency, isPinSecurityEnabled, markPinUnlockedForSession, setPinSecurity, updatePinVerifyFrequency, verifyPin, type PinVerifyFrequency } from '../../shared/pinSecurity';
-import { PTCredentialStorageService } from '../../shared/services/ptCredentialStorage';
+import { PTCredentialStorageService } from '../../shared/services/credentialStorage';
 import { getSiteAutoOpenConfig, saveSiteAutoOpenConfig, SITE_AUTO_CLOSE_DELAY_PRESETS, SITE_AUTO_OPEN_INTERVAL_PRESETS, type SiteAutoOpenConfig } from '../../shared/siteAutoOpen';
 import { getWebEmbedFeaturesConfig, saveWebEmbedFeaturesConfig, type WebEmbedFeaturesConfig } from '../../shared/webEmbedFeatures';
 import { STORAGE_KEYS } from '../../shared/constants';
 import { encryptWebDavPassword, decryptWebDavPassword, encryptApiToken, decryptApiToken, encryptWebDavUsername, decryptWebDavUsername, encryptWebDavUrl, decryptWebDavUrl } from '../../shared/secureStorage';
 import { generatePtBackupKey, loadPtBackupKey, savePtBackupKey } from '../../shared/ptBackupCrypto';
+import { getBaseUrl, getToken } from '../../shared/api/auth';
+import { createMpApiClient } from '../../shared/api/client';
+import { themeState, setTheme, type ThemeMode } from '../../shared/stores/themeStore';
 
 const emit = defineEmits(['navigate']);
+
+// 主题设置
+const themeMode = ref<ThemeMode>(themeState.mode);
+function onThemeChange(val: ThemeMode) {
+  setTheme(val);
+}
+
 const pinEnabled = ref(false);
 const pinFrequency = ref<PinVerifyFrequency>('always');
 const pendingFrequency = ref<PinVerifyFrequency | null>(null);
@@ -757,10 +839,6 @@ async function savePtCredsConfigForm() {
   }
 }
 
-function openPtCredsManager() {
-  emit('navigate', 'pt-creds-manager');
-}
-
 
 const pinDialogTitle = computed(() => {
   if (pinDialogMode.value === 'enable') return '启用 PIN 安全保护';
@@ -791,6 +869,7 @@ onMounted(async () => {
   await loadPtCredsConfig();
   await loadPtBackupKeyValue();
   await loadCustomBgConfigForm();
+  await loadDailyWallpaperConfig();
 });
 
 async function loadApiToken() {
@@ -987,10 +1066,6 @@ async function saveSiteAutoOpenConfigForm() {
 function openPinDialog(mode: 'enable' | 'disable' | 'frequency') {
   pinDialogMode.value = mode;
   pinDialogVisible.value = true;
-}
-
-function normalizePinInput(value: string): string {
-  return value.replace(/\D/g, '').slice(0, 6);
 }
 
 // ========== PIN 6 位独立输入框 ==========
@@ -1231,6 +1306,11 @@ async function saveCustomBgConfig() {
   }
 }
 
+async function onCustomBgEnabledChange(val: boolean) {
+  customBgConfig.enabled = val;
+  await saveCustomBgConfig();
+}
+
 async function handleLocalBgUpload(file: any) {
   if (!file.raw) return;
   customBgSaving.value = true;
@@ -1281,6 +1361,143 @@ async function clearBgImage() {
     ElMessage.error('清除背景图片失败');
   } finally {
     customBgSaving.value = false;
+  }
+}
+
+// ========== MoviePilot 壁纸功能 ==========
+const fetchingWallpapers = ref(false);
+const mpWallpapers = ref<string[]>([]);
+
+async function fetchMpWallpapers() {
+  fetchingWallpapers.value = true;
+  try {
+    const baseUrl = await getBaseUrl();
+    const token = await getToken();
+    if (!baseUrl || !token) {
+      ElMessage.warning('请先配置 MP 服务器地址和令牌');
+      return;
+    }
+    const client = createMpApiClient({ baseURL: baseUrl, getToken });
+    const response = await client.get('/api/v1/login/wallpapers');
+    const data = response.data;
+    if (Array.isArray(data)) {
+      mpWallpapers.value = data.filter((url: string) => url && typeof url === 'string');
+    } else if (data?.data && Array.isArray(data.data)) {
+      mpWallpapers.value = data.data.filter((url: string) => url && typeof url === 'string');
+    }
+    if (mpWallpapers.value.length === 0) {
+      ElMessage.info('未获取到壁纸，请检查 MP 服务器配置');
+    }
+  } catch (error) {
+    console.error('获取 MP 壁纸失败:', error);
+    ElMessage.error('获取壁纸失败，请检查 MP 服务器连接');
+  } finally {
+    fetchingWallpapers.value = false;
+  }
+}
+
+async function selectMpWallpaper(url: string) {
+  customBgConfig.url = url;
+  customBgSaving.value = true;
+  try {
+    const base64 = await downloadAndCompressImage(url);
+    await saveCustomBgImageToStorage(base64);
+    updateBgStore({}, base64);
+    await saveCustomBgConfig();
+    ElMessage.success('壁纸设置成功');
+  } catch (error) {
+    ElMessage.error(`壁纸设置失败: ${(error as Error).message}`);
+  } finally {
+    customBgSaving.value = false;
+  }
+}
+
+// ========== 每日壁纸功能 ==========
+const fetchingDailyWallpaper = ref(false);
+const dailyWallpaperEnabled = ref(false);
+
+// 加载每日壁纸配置
+async function loadDailyWallpaperConfig() {
+  try {
+    const data = await chrome.storage.local.get(['dailyWallpaperEnabled', 'lastDailyWallpaperDate']);
+    dailyWallpaperEnabled.value = data.dailyWallpaperEnabled === true;
+    
+    // 如果开启且今天还没获取过，自动获取
+    if (dailyWallpaperEnabled.value) {
+      const today = new Date().toISOString().slice(0, 10);
+      const lastDate = data.lastDailyWallpaperDate || '';
+      if (lastDate !== today) {
+        // 异步获取，不阻塞页面加载
+        setTimeout(() => fetchDailyWallpaper(), 500);
+      }
+    }
+  } catch {}
+}
+
+// 保存每日壁纸配置
+async function saveDailyWallpaperConfig(enabled: boolean) {
+  try {
+    await chrome.storage.local.set({ dailyWallpaperEnabled: enabled });
+  } catch {}
+}
+
+// 标记今天已获取
+async function markDailyWallpaperFetched() {
+  const today = new Date().toISOString().slice(0, 10);
+  await chrome.storage.local.set({ lastDailyWallpaperDate: today });
+}
+
+// 开关切换处理
+async function onDailyWallpaperToggle(val: boolean) {
+  await saveDailyWallpaperConfig(val);
+  if (val) {
+    // 开启时立即获取一次
+    await fetchDailyWallpaper();
+  } else {
+    ElMessage.info('已关闭每日壁纸');
+  }
+}
+
+async function fetchDailyWallpaper() {
+  fetchingDailyWallpaper.value = true;
+  try {
+    const baseUrl = await getBaseUrl();
+    const token = await getToken();
+    if (!baseUrl || !token) {
+      ElMessage.warning('请先配置 MP 服务器地址和令牌');
+      return;
+    }
+    const client = createMpApiClient({ baseURL: baseUrl, getToken });
+    const response = await client.get('/api/v1/login/wallpaper');
+    const data = response.data;
+    
+    let wallpaperUrl = '';
+    if (data?.message && typeof data.message === 'string') {
+      wallpaperUrl = data.message;
+    } else if (data?.data && typeof data.data === 'string') {
+      wallpaperUrl = data.data;
+    } else if (typeof data === 'string') {
+      wallpaperUrl = data;
+    }
+    
+    if (!wallpaperUrl) {
+      ElMessage.info('未获取到每日壁纸');
+      return;
+    }
+    
+    // 使用获取到的壁纸 URL 设置背景
+    customBgConfig.url = wallpaperUrl;
+    const base64 = await downloadAndCompressImage(wallpaperUrl);
+    await saveCustomBgImageToStorage(base64);
+    updateBgStore({}, base64);
+    await saveCustomBgConfig();
+    await markDailyWallpaperFetched();
+    ElMessage.success('每日壁纸设置成功');
+  } catch (error) {
+    console.error('获取每日壁纸失败:', error);
+    ElMessage.error('获取每日壁纸失败，请检查 MP 服务器连接');
+  } finally {
+    fetchingDailyWallpaper.value = false;
   }
 }
 </script>
@@ -1473,6 +1690,10 @@ async function clearBgImage() {
   margin-top: 8px;
 }
 
+.theme-radio-group {
+  flex-shrink: 0;
+}
+
 .webdav-form {
   padding-top: 12px;
 }
@@ -1588,5 +1809,41 @@ async function clearBgImage() {
 .pt-cred-row:hover {
   background-color: #f8fafc !important;
   border-radius: 4px;
+}
+
+/* MoviePilot 壁纸网格 */
+.mp-wallpaper-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+  margin-top: 8px;
+  width: 100%;
+}
+
+.mp-wallpaper-item {
+  position: relative;
+  aspect-ratio: 16 / 9;
+  border-radius: 8px;
+  overflow: hidden;
+  cursor: pointer;
+  border: 2px solid transparent;
+  transition: all 0.2s ease;
+}
+
+.mp-wallpaper-item:hover {
+  border-color: rgba(59, 130, 246, 0.5);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  transform: translateY(-2px);
+}
+
+.mp-wallpaper-item.active {
+  border-color: #3b82f6;
+  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.3);
+}
+
+.mp-wallpaper-item img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
 }
 </style>

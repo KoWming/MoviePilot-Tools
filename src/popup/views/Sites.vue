@@ -1030,6 +1030,12 @@ onMounted(async () => {
   gap: 12px; 
 }
 
+.site-cards {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
 /* 站点卡片主体 */
 .site-card {
   background: #ffffff;
@@ -1044,6 +1050,7 @@ onMounted(async () => {
 .site-card:hover {
   box-shadow: 0 4px 16px rgba(0, 0, 0, 0.15);
   transform: translateY(-2px);
+  z-index: 10;
 }
 
 /* 顶部状态栏 */

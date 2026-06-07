@@ -1817,8 +1817,10 @@ function getTotpSiteIcon(site: TOTPSite): string | null {
 
 .totp-card {
   border-radius: 12px;
-  background: #ffffff;
-  border: 1px solid #e2e8f0;
+  background: rgba(255, 255, 255, 0.85);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(226, 232, 240, 0.8);
   box-shadow: 0 2px 4px rgba(0, 0, 0, 0.02);
   padding: 12px;
   display: flex;
@@ -1924,11 +1926,16 @@ function getTotpSiteIcon(site: TOTPSite): string | null {
 
 .action-btn:hover {
   background: #f1f5f9 !important;
-  color: #1677ff !important;
+  color: #16a34a !important;
 }
 
 .text-danger {
   color: #ef4444;
+}
+
+.delete-btn:hover {
+  background: #fef2f2 !important;
+  color: #ef4444 !important;
 }
 
 .delete-menu-item:hover {

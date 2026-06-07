@@ -1,5 +1,5 @@
 <template>
-  <div class="download-manager">
+  <div class="download-manager" v-loading="loadingClients">
     <!-- 操作栏 -->
     <div v-if="downloaders.length > 0" class="action-bar">
       <el-select 
@@ -62,7 +62,7 @@
     </div>
     
     <!-- 无下载器提示 -->
-    <div v-else class="no-downloader">
+    <div v-else-if="!loadingClients" class="no-downloader">
       <el-empty description="未配置下载器">
         <el-button type="primary" @click="onOpenWeb">前往配置</el-button>
       </el-empty>
@@ -89,6 +89,7 @@ import AddDownloadDialog, { type DownloadType } from '../components/AddDownloadD
 const downloaders = ref<DownloaderConf[]>([]);
 const activeDownloader = ref<string>('');
 const refreshing = ref(false);
+const loadingClients = ref(true);
 const listRef = ref<InstanceType<typeof DownloadListView> | null>(null);
 const showAddDownload = ref(false);
 const downloadType = ref<DownloadType>('torrent');
@@ -97,6 +98,7 @@ const prefillText = ref('');
 // 加载下载器配置
 async function loadDownloaders() {
   try {
+    loadingClients.value = true;
     downloaders.value = await downloadApi.getDownloadClients();
     if (downloaders.value.length > 0 && !activeDownloader.value) {
       activeDownloader.value = downloaders.value[0].name;
@@ -104,6 +106,8 @@ async function loadDownloaders() {
   } catch (error) {
     console.error('加载下载器失败:', error);
     ElMessage.error('加载下载器配置失败');
+  } finally {
+    loadingClients.value = false;
   }
 }
 

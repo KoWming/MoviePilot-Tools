@@ -2,12 +2,13 @@
   <div
     class="popup-root layout"
     id="popup-root"
-    :class="{ 'has-custom-bg': bgStore.enabled && bgStore.image }"
+    :class="{ 'has-custom-bg': bgStore.enabled && bgStore.image && themeState.effective !== 'dark' }"
+    :data-theme="themeState.effective"
     style="position: relative;"
   >
     <!-- Custom Background Layer -->
     <div
-      v-if="bgStore.enabled && bgStore.image"
+      v-if="bgStore.enabled && bgStore.image && themeState.effective !== 'dark'"
       class="custom-bg-layer"
       :style="{
         backgroundImage: `url(${bgStore.image})`,
@@ -134,10 +135,11 @@ import { STORAGE_KEYS } from '../shared/constants';
 import { getPinSecurityConfig, getPinVerifyFrequency, isPinUnlockedForSession, markPinUnlockedForSession, verifyPin } from '../shared/pinSecurity';
 import About from './views/About.vue';
 import { bgStore, loadBgStore } from '../shared/stores/bgStore';
+import { themeState } from '../shared/stores/themeStore';
 
 // Watch background settings to toggle body classes
 watch(
-  () => bgStore.enabled && bgStore.image,
+  () => bgStore.enabled && bgStore.image && themeState.effective !== 'dark',
   (hasBg) => {
     const targets = [document.documentElement, document.body];
     targets.forEach((t) => {
@@ -206,33 +208,30 @@ onMounted(async () => {
     view.value = 'site-management';
     pinLocked.value = await shouldLockWithPin();
   }
-  // 监听后台导航事件
+  // 监听后台导航事件（通过 storage 传递，稳定可靠）
   try {
-    chrome.runtime.onMessage.addListener((msg) => {
-      if (msg?.type === 'NAVIGATE_TO_ROUTE') {
-        const path = (msg.path || '/download') as string;
-        if (path === '/download') {
+    const handlePendingRoute = async () => {
+      const pending = await chrome.storage.local.get(['mp.pending_route']);
+      if (pending && pending['mp.pending_route']) {
+        const route = pending['mp.pending_route'] as any;
+        if (route?.path === '/download') {
           view.value = 'download-manager';
-          // 向下载管理器传递 URL 和标题
-          if (msg.url) {
-            chrome.storage.local.set({ 'mp.pt_download_info': { url: msg.url, title: msg.title } });
+          const queryUrl = route.query?.url || route.url;
+          const queryTitle = route.query?.title || route.title;
+          if (queryUrl) {
+            chrome.storage.local.set({ 'mp.pt_download_info': { url: queryUrl, title: queryTitle } });
           }
         }
+        chrome.storage.local.remove(['mp.pending_route']);
+      }
+    };
+    await handlePendingRoute();
+    // popup 已打开时，监听 storage 变化以响应悬浮图标触发
+    chrome.storage.onChanged.addListener((changes) => {
+      if (changes['mp.pending_route']?.newValue) {
+        handlePendingRoute();
       }
     });
-    // 消费可能已写入的 pending_route
-    const pending = await chrome.storage.local.get(['mp.pending_route']);
-    if (pending && pending['mp.pending_route']) {
-      const route = pending['mp.pending_route'] as any;
-      if (route?.path === '/download') {
-        view.value = 'download-manager';
-        // 向下载管理器传递 URL 和标题
-        if (route.url) {
-          chrome.storage.local.set({ 'mp.pt_download_info': { url: route.url, title: route.title } });
-        }
-      }
-      chrome.storage.local.remove(['mp.pending_route']);
-    }
   } catch {}
 });
 
@@ -496,6 +495,12 @@ html.has-custom-bg-body, body.has-custom-bg-body, .has-custom-bg-body #app {
 .popup-root.has-custom-bg .stats-panel {
   background: transparent !important;
 }
+.popup-root.has-custom-bg .stats-panel .stat-item {
+  background: rgba(255, 255, 255, 0.35) !important;
+  backdrop-filter: blur(8px) !important;
+  -webkit-backdrop-filter: blur(8px) !important;
+  border: 1px solid rgba(255, 255, 255, 0.2) !important;
+}
 
 /* Make containers semi-transparent and glassmorphic */
 .popup-root.has-custom-bg .sidebar,
@@ -563,14 +568,19 @@ html.has-custom-bg-body, body.has-custom-bg-body, .has-custom-bg-body #app {
   box-shadow: none !important;
   backdrop-filter: none !important;
   -webkit-backdrop-filter: none !important;
+  padding-bottom: 4px !important;
 }
 
 /* Make TOTP manager tabs transparent and cohesive under custom background */
 .popup-root.has-custom-bg .totp-tabs {
-  background: rgba(255, 255, 255, 0.18) !important;
-  backdrop-filter: blur(10px) saturate(110%);
-  -webkit-backdrop-filter: blur(10px) saturate(110%);
-  border-bottom-color: rgba(255, 255, 255, 0.15) !important;
+  background: rgba(255, 255, 255, 0.2) !important;
+  backdrop-filter: blur(10px) saturate(110%) !important;
+  -webkit-backdrop-filter: blur(10px) saturate(110%) !important;
+  border: 1px solid rgba(255, 255, 255, 0.25) !important;
+  border-radius: 8px !important;
+  margin: 5px 8px 0 8px !important;
+  padding: 2px 6px !important;
+  overflow: hidden !important;
 }
 .popup-root.has-custom-bg .totp-tab-item {
   color: rgba(15, 23, 42, 0.6) !important;
@@ -584,10 +594,14 @@ html.has-custom-bg-body, body.has-custom-bg-body, .has-custom-bg-body #app {
 
 /* Make PT manager tabs transparent and cohesive under custom background */
 .popup-root.has-custom-bg .pt-tabs {
-  background: rgba(255, 255, 255, 0.18) !important;
-  backdrop-filter: blur(10px) saturate(110%);
-  -webkit-backdrop-filter: blur(10px) saturate(110%);
-  border-bottom-color: rgba(255, 255, 255, 0.15) !important;
+  background: rgba(255, 255, 255, 0.2) !important;
+  backdrop-filter: blur(10px) saturate(110%) !important;
+  -webkit-backdrop-filter: blur(10px) saturate(110%) !important;
+  border: 1px solid rgba(255, 255, 255, 0.25) !important;
+  border-radius: 8px !important;
+  margin: 0px 8px 0 8px !important;
+  padding: 2px 6px !important;
+  overflow: hidden !important;
 }
 .popup-root.has-custom-bg .pt-tab-item {
   color: rgba(15, 23, 42, 0.6) !important;
@@ -635,17 +649,7 @@ html.has-custom-bg-body, body.has-custom-bg-body, .has-custom-bg-body #app {
 
 /* Glassmorphism overrides for buttons - keeping their distinct semantic colors */
 /* Default / Info Button (gray/white) */
-.popup-root.has-custom-bg .el-button:not(.el-button--primary):not(.el-button--danger):not(.el-button--success):not(.el-button--warning):not(.el-button--info) {
-  background: rgba(255, 255, 255, 0.4) !important;
-  backdrop-filter: blur(6px) !important;
-  -webkit-backdrop-filter: blur(6px) !important;
-  border: 1px solid rgba(255, 255, 255, 0.25) !important;
-  color: #334155 !important;
-  transition: all 0.2s ease;
-}
-.popup-root.has-custom-bg .el-button:not(.el-button--primary):not(.el-button--danger):not(.el-button--success):not(.el-button--warning):not(.el-button--info):hover {
-  background: rgba(255, 255, 255, 0.55) !important;
-}
+
 
 /* Primary Button (blue) */
 .popup-root.has-custom-bg .el-button--primary {
@@ -923,6 +927,26 @@ html.has-custom-bg-body, body.has-custom-bg-body, .has-custom-bg-body #app {
   color: #16a34a !important;
 }
 
+/* TOTP Manager card-actions glassmorphism under custom background */
+.popup-root.has-custom-bg .content .content-inner .totp-manager .totp-card .card-actions {
+  background: rgba(255, 255, 255, 0.25) !important;
+  backdrop-filter: blur(4px) !important;
+  -webkit-backdrop-filter: blur(4px) !important;
+  border: 1px solid rgba(255, 255, 255, 0.2) !important;
+}
+.popup-root.has-custom-bg .content .content-inner .totp-manager .totp-card .card-main .card-actions .action-btn {
+  color: #334155 !important;
+  background: transparent !important;
+  border: none !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+  box-shadow: none !important;
+}
+.popup-root.has-custom-bg .content .content-inner .totp-manager .totp-card .card-main .card-actions .action-btn:hover {
+  background: rgba(59, 130, 246, 0.15) !important;
+  color: #3b82f6 !important;
+}
+
 /* User Card glassmorphism overrides */
 .popup-root.has-custom-bg .user-card {
   background: rgba(255, 255, 255, 0.45) !important;
@@ -997,9 +1021,6 @@ html.has-custom-bg-body, body.has-custom-bg-body, .has-custom-bg-body #app {
 .popup-root.has-custom-bg .about-root .footer-text {
   color: #334155 !important;
 }
-
-
-
 
 html, body, #app { margin: 0; padding: 0; box-sizing: border-box; }
 *, *::before, *::after { box-sizing: border-box; }
@@ -1176,6 +1197,1291 @@ html.mobile-root, body.mobile-root, .mobile-root #app { width: 100%; height: 100
     height: 34px !important;
     border-radius: 8px !important;
   }
+}
+
+/* ========== Dark Theme ========== */
+[data-theme="dark"] {
+  background: #0f172a !important;
+  color: #e2e8f0;
+}
+
+[data-theme="dark"] .content {
+  background: #0f172a !important;
+}
+
+[data-theme="dark"] .content-inner {
+  background: transparent !important;
+}
+
+[data-theme="dark"] .sidebar {
+  background: #1e293b !important;
+  border-right-color: #334155 !important;
+  color: #94a3b8;
+}
+
+[data-theme="dark"] .sidebar .item {
+  color: #94a3b8;
+}
+
+[data-theme="dark"] .sidebar .item svg {
+  color: #94a3b8 !important;
+}
+
+[data-theme="dark"] .sidebar .item:hover {
+  background: rgba(255, 255, 255, 0.08) !important;
+  color: #e2e8f0;
+}
+
+[data-theme="dark"] .sidebar .item:hover svg {
+  color: #e2e8f0 !important;
+}
+
+[data-theme="dark"] .sidebar .item.active {
+  background: rgba(59, 130, 246, 0.15) !important;
+  color: #60a5fa !important;
+  box-shadow: inset 0 0 0 1px rgba(59, 130, 246, 0.25) !important;
+}
+
+[data-theme="dark"] .sidebar .item.active svg {
+  color: #60a5fa !important;
+}
+
+[data-theme="dark"] .topbar {
+  background: #1e293b !important;
+  border-bottom-color: #334155 !important;
+  color: #e2e8f0;
+}
+
+[data-theme="dark"] .topbar .title {
+  color: #e2e8f0 !important;
+}
+
+[data-theme="dark"] .card,
+[data-theme="dark"] .el-card,
+[data-theme="dark"] .settings-card {
+  background: #1e293b !important;
+  border-color: #334155 !important;
+  color: #e2e8f0;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3) !important;
+}
+
+[data-theme="dark"] .card .title,
+[data-theme="dark"] .card .brand .title {
+  color: #f1f5f9 !important;
+}
+
+[data-theme="dark"] .section-title {
+  color: #e2e8f0 !important;
+}
+
+[data-theme="dark"] .section-subtitle,
+[data-theme="dark"] .setting-title,
+[data-theme="dark"] .setting-desc,
+[data-theme="dark"] .setting-desc {
+  color: #94a3b8 !important;
+}
+
+[data-theme="dark"] .setting-row {
+  border-bottom-color: #334155 !important;
+}
+
+[data-theme="dark"] .el-input__wrapper {
+  background: #0f172a !important;
+  border-color: #334155 !important;
+  color: #e2e8f0 !important;
+  box-shadow: 0 0 0 1px #334155 inset !important;
+}
+
+[data-theme="dark"] .form-row-two input,
+[data-theme="dark"] .form input,
+[data-theme="dark"] .el-input__inner {
+  background: transparent !important;
+  border: none !important;
+  box-shadow: none !important;
+  color: #e2e8f0 !important;
+}
+
+[data-theme="dark"] .el-textarea__inner {
+  background: #0f172a !important;
+  border-color: #334155 !important;
+  color: #e2e8f0 !important;
+  box-shadow: 0 0 0 1px #334155 inset !important;
+}
+
+[data-theme="dark"] .el-textarea__inner:hover,
+[data-theme="dark"] .el-textarea__inner:focus {
+  border-color: #475569 !important;
+  box-shadow: 0 0 0 1px #475569 inset !important;
+}
+
+/* 覆盖浏览器自动填充（Autofill）带来的高亮背景色 */
+[data-theme="dark"] input:-webkit-autofill,
+[data-theme="dark"] input:-webkit-autofill:hover,
+[data-theme="dark"] input:-webkit-autofill:focus,
+[data-theme="dark"] textarea:-webkit-autofill,
+[data-theme="dark"] textarea:-webkit-autofill:hover,
+[data-theme="dark"] textarea:-webkit-autofill:focus {
+  -webkit-text-fill-color: #e2e8f0 !important;
+  -webkit-box-shadow: 0 0 0px 1000px #0f172a inset !important;
+  transition: background-color 5000s ease-in-out 0s !important;
+}
+
+
+[data-theme="dark"] .el-input__inner::placeholder {
+  color: #475569 !important;
+}
+
+[data-theme="dark"] .el-input__wrapper:hover,
+[data-theme="dark"] .el-input__wrapper.is-focus {
+  border-color: #475569 !important;
+  box-shadow: 0 0 0 1px #475569 inset !important;
+}
+
+[data-theme="dark"] .icon-prefix,
+[data-theme="dark"] .icon-prefix path {
+  color: #94a3b8 !important;
+  fill: currentColor !important;
+}
+
+/* ========== 全局输入框前后缀插槽 (append/prepend) 深色适配 ========== */
+[data-theme="dark"] .el-input-group__append,
+[data-theme="dark"] .el-input-group__prepend {
+  background-color: #1e293b !important;
+  border: none !important;
+  box-shadow: 0 1px 0 0 #334155 inset, 0 -1px 0 0 #334155 inset, -1px 0 0 0 #334155 inset !important;
+  color: #cbd5e1 !important;
+}
+[data-theme="dark"] .el-input-group__prepend {
+  box-shadow: 0 1px 0 0 #334155 inset, 0 -1px 0 0 #334155 inset, 1px 0 0 0 #334155 inset !important;
+}
+[data-theme="dark"] .el-input-group__append .el-button,
+[data-theme="dark"] .el-input-group__prepend .el-button {
+  background-color: transparent !important;
+  border: none !important;
+  box-shadow: none !important;
+  color: inherit !important;
+  margin: 0 !important;
+}
+[data-theme="dark"] .el-input-group__append .el-button:hover,
+[data-theme="dark"] .el-input-group__prepend .el-button:hover {
+  background-color: rgba(255, 255, 255, 0.05) !important;
+  color: #60a5fa !important;
+}
+
+/* ========== 全局 el-input-number 数字输入框增减按钮深色适配 ========== */
+[data-theme="dark"] .el-input-number__decrease,
+[data-theme="dark"] .el-input-number__increase {
+  background-color: #1e293b !important;
+  border-color: #334155 !important;
+  color: #cbd5e1 !important;
+}
+[data-theme="dark"] .el-input-number__decrease:hover,
+[data-theme="dark"] .el-input-number__increase:hover {
+  background-color: #334155 !important;
+  color: #60a5fa !important;
+}
+[data-theme="dark"] .el-input-number__decrease {
+  border-right: 1px solid #334155 !important;
+}
+[data-theme="dark"] .el-input-number__increase {
+  border-left: 1px solid #334155 !important;
+}
+[data-theme="dark"] .el-input-number__decrease.is-disabled,
+[data-theme="dark"] .el-input-number__increase.is-disabled {
+  background-color: #0f172a !important;
+  color: #475569 !important;
+  border-color: #334155 !important;
+}
+
+/* ========== 全局 el-skeleton 骨架屏深色适配 ========== */
+[data-theme="dark"] .el-skeleton {
+  --el-skeleton-color: #1e293b !important;
+  --el-skeleton-to-color: #334155 !important;
+}
+[data-theme="dark"] .el-skeleton__item {
+  background: #1e293b !important;
+}
+
+/* ========== 全局 el-loading-mask 加载遮罩深色适配 ========== */
+[data-theme="dark"] .el-loading-mask {
+  background-color: rgba(15, 23, 42, 0.75) !important;
+}
+[data-theme="dark"] .el-loading-spinner .path {
+  stroke: #60a5fa !important;
+}
+[data-theme="dark"] .el-loading-spinner .el-loading-text {
+  color: #60a5fa !important;
+}
+
+/* ========== 使用自定义背景时的加载阶段毛玻璃透光效果 ========== */
+.has-custom-bg .el-loading-mask {
+  background-color: rgba(255, 255, 255, 0.4) !important;
+  backdrop-filter: blur(10px) !important;
+  -webkit-backdrop-filter: blur(10px) !important;
+}
+
+.has-custom-bg .el-loading-spinner .path {
+  stroke: var(--el-color-primary) !important;
+}
+
+.has-custom-bg .el-loading-spinner .el-loading-text {
+  color: var(--el-color-primary) !important;
+}
+
+/* 骨架屏半透明毛玻璃透光 */
+.has-custom-bg .el-skeleton {
+  --el-skeleton-color: rgba(255, 255, 255, 0.25) !important;
+  --el-skeleton-to-color: rgba(255, 255, 255, 0.45) !important;
+}
+
+.has-custom-bg .el-skeleton__item {
+  background: rgba(255, 255, 255, 0.25) !important;
+  backdrop-filter: blur(4px) !important;
+  -webkit-backdrop-filter: blur(4px) !important;
+}
+
+
+[data-theme="dark"] .el-select__wrapper {
+  background: #0f172a !important;
+  box-shadow: 0 0 0 1px #334155 inset !important;
+}
+[data-theme="dark"] .el-select__wrapper.is-hovering,
+[data-theme="dark"] .el-select__wrapper.is-focus {
+  box-shadow: 0 0 0 1px #475569 inset !important;
+}
+
+[data-theme="dark"] .el-select__selected-item span {
+  color: #e2e8f0 !important;
+}
+
+[data-theme="dark"] .el-textarea__inner {
+  background: #0f172a !important;
+  border-color: #334155 !important;
+  color: #e2e8f0 !important;
+}
+
+[data-theme="dark"] .el-switch__core {
+  background: #334155 !important;
+  border-color: #334155 !important;
+}
+
+[data-theme="dark"] .el-switch.is-checked .el-switch__core {
+  background: #3b82f6 !important;
+  border-color: #3b82f6 !important;
+}
+
+[data-theme="dark"] .el-radio-button__inner {
+  background: #1e293b !important;
+  border-color: #334155 !important;
+  color: #94a3b8 !important;
+}
+
+[data-theme="dark"] .el-radio-button__original-radio:checked + .el-radio-button__inner {
+  background: #3b82f6 !important;
+  border-color: #3b82f6 !important;
+  color: #fff !important;
+}
+
+[data-theme="dark"] .el-radio {
+  color: #e2e8f0 !important;
+}
+
+[data-theme="dark"] .el-checkbox__label {
+  color: #e2e8f0 !important;
+}
+
+[data-theme="dark"] .meta,
+[data-theme="dark"] .meta span {
+  color: #64748b !important;
+}
+
+[data-theme="dark"] .meta a {
+  color: #60a5fa !important;
+}
+
+[data-theme="dark"] .el-dropdown-menu {
+  background: #1e293b !important;
+  border-color: #334155 !important;
+  --el-dropdown-menuItem-hover-fill: rgba(59, 130, 246, 0.15) !important;
+  --el-dropdown-menuItem-hover-color: #60a5fa !important;
+}
+
+[data-theme="dark"] .el-dropdown-menu__item {
+  color: #e2e8f0 !important;
+  background: transparent !important;
+}
+
+[data-theme="dark"] .el-dropdown-menu__item:hover {
+  background: rgba(59, 130, 246, 0.15) !important;
+  color: #60a5fa !important;
+}
+
+[data-theme="dark"] .el-dropdown-menu__item.is-disabled {
+  color: #475569 !important;
+}
+
+[data-theme="dark"] .el-dropdown-menu__item--divided {
+  border-color: #334155 !important;
+}
+
+[data-theme="dark"] .el-dropdown-menu__item--divided::before {
+  background: #334155 !important;
+}
+
+[data-theme="dark"] .el-popper.is-light {
+  background: #1e293b !important;
+  border-color: #334155 !important;
+}
+
+[data-theme="dark"] .el-popper.is-light .el-popper__arrow::before {
+  background: #1e293b !important;
+  border-color: #334155 !important;
+}
+
+[data-theme="dark"] .el-dialog {
+  background: #1e293b !important;
+  border-color: #334155 !important;
+}
+
+[data-theme="dark"] .el-dialog__title {
+  color: #e2e8f0 !important;
+}
+
+[data-theme="dark"] .el-dialog__body {
+  color: #e2e8f0 !important;
+}
+
+[data-theme="dark"] .el-alert {
+  background: rgba(239, 68, 68, 0.12) !important;
+  border-color: rgba(239, 68, 68, 0.25) !important;
+}
+
+[data-theme="dark"] .el-alert__title {
+  color: #fca5a5 !important;
+}
+
+[data-theme="dark"] .version-value {
+  color: #94a3b8 !important;
+}
+
+[data-theme="dark"] .site-management .site-card {
+  background: #1e293b !important;
+  border-color: #334155 !important;
+}
+
+[data-theme="dark"] .site-management .site-card .site-name {
+  color: #f1f5f9 !important;
+}
+
+[data-theme="dark"] .site-management .site-card .site-domain {
+  color: #60a5fa !important;
+}
+
+[data-theme="dark"] .site-management .stat-item {
+  background: rgba(30, 41, 59, 0.8) !important;
+  border-color: #334155 !important;
+}
+
+[data-theme="dark"] .site-management .stat-number {
+  color: #e2e8f0 !important;
+}
+
+[data-theme="dark"] .site-management .stat-label {
+  color: #94a3b8 !important;
+}
+
+[data-theme="dark"] .site-management .toolbar {
+  background: #1e293b !important;
+  border-color: #334155 !important;
+}
+
+[data-theme="dark"] .site-management .act-btn {
+  color: #94a3b8 !important;
+}
+
+[data-theme="dark"] .site-management .act-btn:hover {
+  background: rgba(255, 255, 255, 0.08) !important;
+}
+
+[data-theme="dark"] .site-management .act-update {
+  background: rgba(96, 165, 250, 0.12) !important;
+  color: #60a5fa !important;
+  transition: all 0.2s ease !important;
+}
+
+[data-theme="dark"] .site-management .act-update:hover {
+  background: rgba(96, 165, 250, 0.24) !important;
+  color: #93c5fd !important;
+}
+
+[data-theme="dark"] .site-management .act-overwrite {
+  background: rgba(248, 113, 113, 0.12) !important;
+  color: #f87171 !important;
+  transition: all 0.2s ease !important;
+}
+
+[data-theme="dark"] .site-management .act-overwrite:hover {
+  background: rgba(248, 113, 113, 0.24) !important;
+  color: #fca5a5 !important;
+}
+
+[data-theme="dark"] .site-management .act-login {
+  background: rgba(52, 211, 153, 0.12) !important;
+  color: #34d399 !important;
+  transition: all 0.2s ease !important;
+}
+
+[data-theme="dark"] .site-management .act-login:hover {
+  background: rgba(52, 211, 153, 0.24) !important;
+  color: #86efac !important;
+}
+
+[data-theme="dark"] .site-management .act-more {
+  background: #334155 !important;
+  border-color: #475569 !important;
+  color: #94a3b8 !important;
+  transition: all 0.15s cubic-bezier(0.4, 0, 0.2, 1) !important;
+}
+
+[data-theme="dark"] .site-management .act-more:hover {
+  background: #475569 !important;
+  color: #e2e8f0 !important;
+}
+
+[data-theme="dark"] .site-management .diff-badge {
+  border-color: rgba(255, 255, 255, 0.12) !important;
+}
+
+[data-theme="dark"] .site-management .tag-cookie {
+  background: rgba(245, 158, 11, 0.12) !important;
+}
+
+[data-theme="dark"] .site-management .tag-ua {
+  background: rgba(59, 130, 246, 0.12) !important;
+}
+
+[data-theme="dark"] .status-badge {
+  border-color: rgba(255, 255, 255, 0.12) !important;
+}
+
+[data-theme="dark"] .totp-manager .totp-card,
+[data-theme="dark"] .pt-manager-root .pt-card {
+  background: #1e293b !important;
+  border-color: #334155 !important;
+  color: #e2e8f0;
+}
+
+[data-theme="dark"] .totp-manager .site-name,
+[data-theme="dark"] .pt-manager-root .site-name {
+  color: #f1f5f9 !important;
+}
+
+[data-theme="dark"] .totp-manager .site-domain,
+[data-theme="dark"] .pt-manager-root .site-domain {
+  color: #60a5fa !important;
+}
+
+[data-theme="dark"] .card-actions {
+  background: #334155 !important;
+  border-color: #475569 !important;
+}
+
+[data-theme="dark"] .action-btn {
+  color: #94a3b8 !important;
+}
+
+[data-theme="dark"] .action-btn:hover {
+  background: rgba(255, 255, 255, 0.08) !important;
+  color: #e2e8f0 !important;
+}
+
+[data-theme="dark"] .code-value {
+  color: #60a5fa !important;
+}
+
+[data-theme="dark"] .code-wrap {
+  background: #0f172a !important;
+  border-color: #334155 !important;
+}
+
+[data-theme="dark"] .el-card .pin-lock-card,
+[data-theme="dark"] .pin-lock-page .card {
+  background: #1e293b !important;
+  border-color: #334155 !important;
+}
+
+[data-theme="dark"] .pin-code-box {
+  background: #0f172a !important;
+  border-color: #334155 !important;
+  color: #e2e8f0 !important;
+}
+
+[data-theme="dark"] .pin-unlock-btn {
+  background: #3b82f6 !important;
+}
+
+[data-theme="dark"] .pin-subtitle {
+  color: #94a3b8 !important;
+}
+
+[data-theme="dark"] .download-card,
+[data-theme="dark"] .comprehensive-card,
+[data-theme="dark"] .plugin-root {
+  background: #1e293b !important;
+  border-color: #334155 !important;
+  color: #e2e8f0;
+}
+
+[data-theme="dark"] .about-root {
+  background: transparent !important;
+}
+
+[data-theme="dark"] .footer-section {
+  border-top-color: #334155 !important;
+}
+
+[data-theme="dark"] .footer-text {
+  color: #64748b !important;
+}
+
+[data-theme="dark"] .link {
+  background: rgba(59, 130, 246, 0.15) !important;
+  border-color: rgba(59, 130, 246, 0.25) !important;
+  color: #60a5fa !important;
+}
+
+[data-theme="dark"] .el-loading-mask {
+  background: rgba(15, 23, 42, 0.6) !important;
+}
+
+/* ========== Element Plus Teleport Components dark theme ========== */
+[data-theme="dark"] .el-message-box {
+  background: #1e293b !important;
+  border-color: #334155 !important;
+}
+[data-theme="dark"] .el-message-box__title {
+  color: #e2e8f0 !important;
+}
+[data-theme="dark"] .el-message-box__content {
+  color: #cbd5e1 !important;
+}
+[data-theme="dark"] .el-message-box__input input {
+  background: #0f172a !important;
+  border-color: #334155 !important;
+  color: #e2e8f0 !important;
+}
+[data-theme="dark"] .el-message {
+  background: #1e293b !important;
+  border-color: #334155 !important;
+}
+[data-theme="dark"] .el-message__content {
+  color: #cbd5e1 !important;
+}
+[data-theme="dark"] .el-notification {
+  background: #1e293b !important;
+  border-color: #334155 !important;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3) !important;
+}
+[data-theme="dark"] .el-notification__title {
+  color: #e2e8f0 !important;
+}
+[data-theme="dark"] .el-notification__content {
+  color: #cbd5e1 !important;
+}
+
+[data-theme="dark"] .el-popper {
+  background: #1e293b !important;
+  border-color: #334155 !important;
+  color: #e2e8f0 !important;
+}
+[data-theme="dark"] .el-popper__arrow::before {
+  background: #1e293b !important;
+  border-color: #334155 !important;
+}
+[data-theme="dark"] .el-form-item__label {
+  color: #cbd5e1 !important;
+}
+[data-theme="dark"] .el-checkbox__inner {
+  background-color: #0f172a !important;
+  border-color: #334155 !important;
+}
+[data-theme="dark"] .el-checkbox.is-checked .el-checkbox__inner {
+  background-color: #3b82f6 !important;
+  border-color: #3b82f6 !important;
+}
+
+/* ========== PIN unlock page dark theme ========== */
+[data-theme="dark"] .pin-lock-page {
+  background:
+    radial-gradient(circle at top, rgba(59, 130, 246, 0.08), transparent 34%),
+    #0f172a !important;
+}
+[data-theme="dark"] .pin-lock-card .pin-code-box {
+  background: #0f172a !important;
+  border-color: #334155 !important;
+  color: #e2e8f0 !important;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.2) !important;
+}
+[data-theme="dark"] .pin-lock-card .pin-code-box:focus {
+  border-color: #3b82f6 !important;
+  background: #0f172a !important;
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.25) !important;
+}
+[data-theme="dark"] .pin-lock-card .pin-code-box:valid {
+  border-color: #60a5fa !important;
+  background: #1e293b !important;
+  box-shadow: none !important;
+}
+
+
+/* ========== Sites.vue dark theme overrides ========== */
+[data-theme="dark"] .sites-root .site-card {
+  background: #1e293b !important;
+  border-color: #334155 !important;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3) !important;
+}
+[data-theme="dark"] .sites-root .site-card:hover {
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.45) !important;
+}
+[data-theme="dark"] .sites-root .site-name {
+  color: #f1f5f9 !important;
+}
+[data-theme="dark"] .sites-root .card-header {
+  border-bottom-color: #334155 !important;
+}
+[data-theme="dark"] .sites-root .update-time,
+[data-theme="dark"] .sites-root .username,
+[data-theme="dark"] .sites-root .metric-label,
+[data-theme="dark"] .sites-root .transfer-label,
+[data-theme="dark"] .sites-root .empty-text {
+  color: #94a3b8 !important;
+}
+[data-theme="dark"] .sites-root .metric-value {
+  color: #cbd5e1 !important;
+}
+[data-theme="dark"] .sites-root .ov-card {
+  background: #1e293b !important;
+  border-color: #334155 !important;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2) !important;
+}
+[data-theme="dark"] .sites-root .ov-card .text .num {
+  color: #e2e8f0 !important;
+}
+[data-theme="dark"] .sites-root .ov-card .text .label {
+  color: #94a3b8 !important;
+}
+[data-theme="dark"] .sites-root .data-transfer {
+  background: #0f172a !important;
+}
+[data-theme="dark"] .sites-root .transfer-value {
+  color: #cbd5e1 !important;
+}
+[data-theme="dark"] .sites-root .transfer-divider {
+  background: #334155 !important;
+}
+[data-theme="dark"] .sites-root .action-btn.secondary {
+  background: #334155 !important;
+  border-color: #475569 !important;
+  color: #cbd5e1 !important;
+}
+[data-theme="dark"] .sites-root .action-btn.secondary:hover {
+  background: #475569 !important;
+  border-color: #64748b !important;
+  color: #e2e8f0 !important;
+}
+[data-theme="dark"] .sites-root .user-level {
+  background: rgba(59, 130, 246, 0.15) !important;
+  color: #60a5fa !important;
+  border-color: rgba(96, 165, 250, 0.25) !important;
+}
+[data-theme="dark"] .sites-root .status-label.connection-normal,
+[data-theme="dark"] .sites-root .status-label.active {
+  color: #4ade80 !important;
+  background: rgba(34, 197, 94, 0.15) !important;
+  border-color: rgba(34, 197, 94, 0.25) !important;
+}
+[data-theme="dark"] .sites-root .status-label.connection-slow {
+  color: #fbbf24 !important;
+  background: rgba(245, 158, 11, 0.15) !important;
+  border-color: rgba(245, 158, 11, 0.25) !important;
+}
+[data-theme="dark"] .sites-root .status-label.connection-failed {
+  color: #f87171 !important;
+  background: rgba(239, 68, 68, 0.15) !important;
+  border-color: rgba(239, 68, 68, 0.25) !important;
+}
+[data-theme="dark"] .sites-root .status-label.inactive,
+[data-theme="dark"] .sites-root .status-label.connection-unknown {
+  color: #94a3b8 !important;
+  background: rgba(255, 255, 255, 0.05) !important;
+  border-color: rgba(255, 255, 255, 0.1) !important;
+}
+
+/* ========== User.vue dark theme overrides ========== */
+[data-theme="dark"] .user-root .version-title,
+[data-theme="dark"] .user-root .version-label {
+  color: #cbd5e1 !important;
+}
+[data-theme="dark"] .user-root .version-value {
+  color: #cbd5e1 !important;
+}
+[data-theme="dark"] .user-root .stat-config {
+  background: linear-gradient(135deg, rgba(59, 130, 246, 0.15) 0%, rgba(30, 41, 59, 0.5) 100%) !important;
+  border-color: rgba(59, 130, 246, 0.25) !important;
+}
+[data-theme="dark"] .user-root .stat-config .stat-num {
+  color: #60a5fa !important;
+}
+[data-theme="dark"] .user-root .stat-enabled {
+  background: linear-gradient(135deg, rgba(34, 197, 94, 0.15) 0%, rgba(30, 41, 59, 0.5) 100%) !important;
+  border-color: rgba(34, 197, 94, 0.25) !important;
+}
+[data-theme="dark"] .user-root .stat-enabled .stat-num {
+  color: #4ade80 !important;
+}
+[data-theme="dark"] .user-root .stat-cookie {
+  background: linear-gradient(135deg, rgba(245, 158, 11, 0.15) 0%, rgba(30, 41, 59, 0.5) 100%) !important;
+  border-color: rgba(245, 158, 11, 0.25) !important;
+}
+[data-theme="dark"] .user-root .stat-cookie .stat-num {
+  color: #fbbf24 !important;
+}
+[data-theme="dark"] .user-root .stat-pending {
+  background: linear-gradient(135deg, rgba(168, 85, 247, 0.15) 0%, rgba(30, 41, 59, 0.5) 100%) !important;
+  border-color: rgba(168, 85, 247, 0.25) !important;
+}
+[data-theme="dark"] .user-root .stat-pending .stat-num {
+  color: #c084fc !important;
+}
+[data-theme="dark"] .user-root .stat-label {
+  color: #94a3b8 !important;
+}
+[data-theme="dark"] .user-root .divider {
+  background: #334155 !important;
+}
+[data-theme="dark"] .user-root .comprehensive-card {
+  background: #1e293b !important;
+  border-color: #334155 !important;
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.3) !important;
+}
+
+/* UserCard.vue 用户资料卡片深色适配 */
+[data-theme="dark"] .user-card {
+  background: linear-gradient(180deg, rgba(245, 158, 11, 0.08) 0%, #1e293b 35%) !important;
+  border-color: #334155 !important;
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.3) !important;
+}
+[data-theme="dark"] .user-card .name {
+  color: #fbbf24 !important;
+}
+[data-theme="dark"] .user-card .edit svg {
+  fill: #94a3b8 !important;
+}
+[data-theme="dark"] .user-card .edit:hover svg {
+  fill: #fbbf24 !important;
+}
+[data-theme="dark"] .user-card .logout-btn,
+[data-theme="dark"] .user-card .logout-btn span {
+  color: #f87171 !important;
+}
+[data-theme="dark"] .user-card .logout-btn {
+  background: rgba(239, 68, 68, 0.15) !important;
+  border-color: rgba(239, 68, 68, 0.3) !important;
+}
+[data-theme="dark"] .user-card .logout-btn:hover {
+  background: rgba(239, 68, 68, 0.25) !important;
+}
+[data-theme="dark"] .user-card .logout-btn .power path {
+  fill: #f87171 !important;
+}
+[data-theme="dark"] .user-card .divider {
+  background: #334155 !important;
+}
+[data-theme="dark"] .user-card .email {
+  color: #94a3b8 !important;
+}
+[data-theme="dark"] .user-card .email .mail path {
+  fill: #60a5fa !important;
+}
+[data-theme="dark"] .user-card .stat-row {
+  background: #0f172a !important;
+  border-color: #334155 !important;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2) !important;
+}
+[data-theme="dark"] .user-card .stat-row .num {
+  color: #f1f5f9 !important;
+}
+[data-theme="dark"] .user-card .stat-row .label {
+  color: #94a3b8 !important;
+}
+[data-theme="dark"] .user-card .stat-row.movie .bubble {
+  background: rgba(250, 173, 20, 0.15) !important;
+}
+[data-theme="dark"] .user-card .stat-row.movie svg {
+  fill: #fbbf24 !important;
+}
+[data-theme="dark"] .user-card .stat-row.tv .bubble {
+  background: rgba(77, 184, 255, 0.15) !important;
+}
+[data-theme="dark"] .user-card .stat-row.tv svg {
+  fill: #60a5fa !important;
+}
+
+[data-theme="dark"] .user-card .badges .el-tag.el-tag--danger,
+[data-theme="dark"] .user-card .badges .el-tag.el-tag--danger .el-tag__content {
+  color: #f87171 !important;
+}
+[data-theme="dark"] .user-card .badges .el-tag.el-tag--danger {
+  background: rgba(239, 68, 68, 0.15) !important;
+  border-color: rgba(239, 68, 68, 0.25) !important;
+}
+[data-theme="dark"] .user-card .badges .el-tag.el-tag--success,
+[data-theme="dark"] .user-card .badges .el-tag.el-tag--success .el-tag__content {
+  color: #4ade80 !important;
+}
+[data-theme="dark"] .user-card .badges .el-tag.el-tag--success {
+  background: rgba(34, 197, 94, 0.15) !important;
+  border-color: rgba(34, 197, 94, 0.25) !important;
+}
+
+
+
+/* ========== About.vue 页面深色适配 ========== */
+[data-theme="dark"] .about-root {
+  background: #0f172a !important;
+}
+[data-theme="dark"] .about-root .hero {
+  border-bottom-color: #334155 !important;
+}
+[data-theme="dark"] .about-root .logo-wrap {
+  background: #1e293b !important;
+  border-color: #334155 !important;
+}
+[data-theme="dark"] .about-root .title {
+  color: #f1f5f9 !important;
+}
+[data-theme="dark"] .about-root .version {
+  color: #a5b4fc !important;
+  background: rgba(99, 102, 241, 0.15) !important;
+  border-color: rgba(99, 102, 241, 0.25) !important;
+}
+[data-theme="dark"] .about-root .nav-item {
+  background: #1e293b !important;
+  border-color: #334155 !important;
+}
+[data-theme="dark"] .about-root .nav-label {
+  color: #e2e8f0 !important;
+}
+[data-theme="dark"] .about-root .fc-item {
+  background: #1e293b !important;
+  border-color: #334155 !important;
+}
+[data-theme="dark"] .about-root .fc-label {
+  color: #e2e8f0 !important;
+}
+[data-theme="dark"] .about-root .ni-site { background: rgba(37, 99, 235, 0.15) !important; color: #60a5fa !important; border-color: rgba(37, 99, 235, 0.25) !important; }
+[data-theme="dark"] .about-root .ni-data { background: rgba(5, 150, 105, 0.15) !important; color: #4ade80 !important; border-color: rgba(5, 150, 105, 0.25) !important; }
+[data-theme="dark"] .about-root .ni-dl { background: rgba(217, 119, 6, 0.15) !important; color: #fbbf24 !important; border-color: rgba(217, 119, 6, 0.25) !important; }
+[data-theme="dark"] .about-root .ni-totp { background: rgba(124, 58, 237, 0.15) !important; color: #c084fc !important; border-color: rgba(124, 58, 237, 0.25) !important; }
+[data-theme="dark"] .about-root .ni-user { background: rgba(29, 78, 216, 0.15) !important; color: #60a5fa !important; border-color: rgba(29, 78, 216, 0.25) !important; }
+[data-theme="dark"] .about-root .ni-plugin { background: rgba(219, 39, 119, 0.15) !important; color: #f472b6 !important; border-color: rgba(219, 39, 119, 0.25) !important; }
+[data-theme="dark"] .about-root .ni-settings { background: rgba(67, 56, 202, 0.15) !important; color: #a5b4fc !important; border-color: rgba(67, 56, 202, 0.25) !important; }
+[data-theme="dark"] .about-root .ni-about { background: rgba(100, 116, 139, 0.15) !important; color: #94a3b8 !important; border-color: rgba(100, 116, 139, 0.25) !important; }
+
+/* ========== DownloadManager.vue 下载管理深色适配 ========== */
+[data-theme="dark"] .download-manager .action-bar {
+  border-bottom-color: #334155 !important;
+}
+[data-theme="dark"] .download-manager .download-item .title {
+  color: #e2e8f0 !important;
+}
+[data-theme="dark"] .download-manager .download-item .media-poster.placeholder {
+  background: #0f172a !important;
+  color: #475569 !important;
+}
+[data-theme="dark"] .download-manager .download-item .torrent-title {
+  color: #94a3b8 !important;
+}
+[data-theme="dark"] .download-manager .download-item .progress-info,
+[data-theme="dark"] .download-manager .download-item .speed-info {
+  color: #94a3b8 !important;
+}
+
+/* ========== SiteManagement.vue 站点管理页深色适配 ========== */
+[data-theme="dark"] .site-management .toolbar {
+  background: #1e293b !important;
+  box-shadow: none !important;
+}
+[data-theme="dark"] .site-management .filter-section .el-checkbox__label {
+  color: #cbd5e1 !important;
+}
+[data-theme="dark"] .site-management .detail-item {
+  border-bottom-color: #334155 !important;
+}
+[data-theme="dark"] .site-management .detail-item .label {
+  color: #94a3b8 !important;
+}
+[data-theme="dark"] .site-management .detail-item .value {
+  color: #f1f5f9 !important;
+}
+[data-theme="dark"] .site-management .stat-supporting {
+  background: linear-gradient(135deg, rgba(0, 131, 143, 0.15) 0%, rgba(30, 41, 59, 0.5) 100%) !important;
+  border-color: rgba(0, 131, 143, 0.25) !important;
+}
+[data-theme="dark"] .site-management .stat-supporting .stat-number { color: #22d3ee !important; }
+[data-theme="dark"] .site-management .stat-supporting .stat-label { color: #06b6d4 !important; }
+
+[data-theme="dark"] .site-management .stat-config {
+  background: linear-gradient(135deg, rgba(25, 118, 210, 0.15) 0%, rgba(30, 41, 59, 0.5) 100%) !important;
+  border-color: rgba(25, 118, 210, 0.25) !important;
+}
+[data-theme="dark"] .site-management .stat-config .stat-number { color: #60a5fa !important; }
+[data-theme="dark"] .site-management .stat-config .stat-label { color: #3b82f6 !important; }
+
+[data-theme="dark"] .site-management .stat-filtered {
+  background: linear-gradient(135deg, rgba(245, 124, 0, 0.15) 0%, rgba(30, 41, 59, 0.5) 100%) !important;
+  border-color: rgba(245, 124, 0, 0.25) !important;
+}
+[data-theme="dark"] .site-management .stat-filtered .stat-number { color: #fbbf24 !important; }
+[data-theme="dark"] .site-management .stat-filtered .stat-label { color: #f59e0b !important; }
+
+[data-theme="dark"] .site-management .stat-pending {
+  background: linear-gradient(135deg, rgba(123, 31, 162, 0.15) 0%, rgba(30, 41, 59, 0.5) 100%) !important;
+  border-color: rgba(123, 31, 162, 0.25) !important;
+}
+[data-theme="dark"] .site-management .stat-pending .stat-number { color: #c084fc !important; }
+[data-theme="dark"] .site-management .stat-pending .stat-label { color: #a855f7 !important; }
+
+/* ========== CredsManager 与 TOTPManager 统一深色适配 ========== */
+[data-theme="dark"] .pt-manager-root,
+[data-theme="dark"] .totp-manager {
+  background: #0f172a !important;
+}
+[data-theme="dark"] .pt-manager-root .toolbar,
+[data-theme="dark"] .totp-manager .toolbar {
+  background: #1e293b !important;
+  border-bottom-color: #334155 !important;
+  box-shadow: none !important;
+}
+[data-theme="dark"] .pt-manager-root .toolbar .search-input :deep(.el-input__wrapper),
+[data-theme="dark"] .totp-manager .toolbar .search-input :deep(.el-input__wrapper) {
+  background: #0f172a !important;
+  border-color: #334155 !important;
+}
+[data-theme="dark"] .pt-manager-root .toolbar .search-input :deep(.el-input__wrapper.is-focus) {
+  border-color: #16a34a !important;
+  box-shadow: 0 0 0 1px #16a34a inset !important;
+}
+[data-theme="dark"] .totp-manager .toolbar .search-input :deep(.el-input__wrapper.is-focus) {
+  border-color: #2563eb !important;
+  box-shadow: 0 0 0 1px #2563eb inset !important;
+}
+[data-theme="dark"] .pt-manager-root .toolbar .compact,
+[data-theme="dark"] .totp-manager .toolbar .compact {
+  background: #1e293b !important;
+  border-color: #334155 !important;
+  color: #cbd5e1 !important;
+}
+[data-theme="dark"] .pt-manager-root .toolbar .compact:hover,
+[data-theme="dark"] .totp-manager .toolbar .compact:hover {
+  background: #334155 !important;
+  color: #f1f5f9 !important;
+}
+[data-theme="dark"] .pt-manager-root .toolbar .add-button {
+  background: #16a34a !important;
+  border-color: #16a34a !important;
+  color: #fff !important;
+}
+[data-theme="dark"] .pt-manager-root .toolbar .add-button:hover {
+  background: #15803d !important;
+  border-color: #15803d !important;
+}
+[data-theme="dark"] .totp-manager .toolbar .add-button {
+  background: #2563eb !important;
+  border-color: #2563eb !important;
+  color: #fff !important;
+}
+[data-theme="dark"] .totp-manager .toolbar .add-button:hover {
+  background: #1d4ed8 !important;
+  border-color: #1d4ed8 !important;
+}
+[data-theme="dark"] .pt-manager-root .pt-tabs,
+[data-theme="dark"] .totp-manager .totp-tabs {
+  background: #1e293b !important;
+  border-bottom-color: #334155 !important;
+}
+[data-theme="dark"] .pt-manager-root .pt-tab-item,
+[data-theme="dark"] .totp-manager .totp-tab-item {
+  color: #94a3b8 !important;
+}
+[data-theme="dark"] .pt-manager-root .pt-tab-item:hover,
+[data-theme="dark"] .totp-manager .totp-tab-item:hover {
+  color: #e2e8f0 !important;
+}
+[data-theme="dark"] .pt-manager-root .pt-tab-item.active,
+[data-theme="dark"] .totp-manager .totp-tab-item.active {
+  color: #16a34a !important;
+}
+[data-theme="dark"] .pt-card .card-password-row {
+  border-top-color: #334155 !important;
+}
+[data-theme="dark"] .pt-card .password-value {
+  color: #e2e8f0 !important;
+}
+[data-theme="dark"] .pt-card .site-domain.link-style,
+[data-theme="dark"] .totp-card .site-domain.link-style {
+  color: #60a5fa !important;
+}
+[data-theme="dark"] .pt-card .site-username:hover,
+[data-theme="dark"] .totp-card .site-username:hover {
+  color: #60a5fa !important;
+}
+[data-theme="dark"] .pt-manager-root .empty-text,
+[data-theme="dark"] .totp-manager .empty-text {
+  color: #94a3b8 !important;
+}
+
+/* ========== PT凭据与两步验证卡片深度深色适配 ========== */
+[data-theme="dark"] .pt-card,
+[data-theme="dark"] .totp-card {
+  background: #1e293b !important;
+  border-color: #334155 !important;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3) !important;
+}
+[data-theme="dark"] .pt-card:hover,
+[data-theme="dark"] .totp-card:hover {
+  border-color: rgba(96, 165, 250, 0.4) !important;
+  box-shadow: 0 4px 16px rgba(96, 165, 250, 0.08) !important;
+  transform: translateY(-1px) !important;
+}
+[data-theme="dark"] .pt-card .site-name,
+[data-theme="dark"] .totp-card .site-name {
+  color: #f1f5f9 !important;
+}
+[data-theme="dark"] .pt-card .site-domain,
+[data-theme="dark"] .totp-card .site-domain {
+  color: #94a3b8 !important;
+}
+[data-theme="dark"] .pt-card .site-domain.link-style,
+[data-theme="dark"] .totp-card .site-domain.link-style {
+  color: #60a5fa !important;
+}
+[data-theme="dark"] .pt-card .site-domain.link-style:hover,
+[data-theme="dark"] .totp-card .site-domain.link-style:hover {
+  color: #93c5fd !important;
+}
+[data-theme="dark"] .pt-card .site-username {
+  color: #cbd5e1 !important;
+}
+[data-theme="dark"] .pt-card .site-username:hover {
+  color: #60a5fa !important;
+}
+[data-theme="dark"] .pt-card .card-actions,
+[data-theme="dark"] .totp-card .card-actions {
+  background: #0f172a !important;
+  border: 1px solid #334155 !important;
+}
+[data-theme="dark"] .pt-card .action-btn,
+[data-theme="dark"] .totp-card .action-btn {
+  color: #cbd5e1 !important;
+  border-radius: 4px !important;
+}
+[data-theme="dark"] .pt-card .action-btn svg,
+[data-theme="dark"] .totp-card .action-btn svg {
+  fill: currentColor !important;
+  color: #cbd5e1 !important;
+}
+[data-theme="dark"] .pt-card .action-btn:hover,
+[data-theme="dark"] .totp-card .action-btn:hover {
+  background: rgba(255, 255, 255, 0.08) !important;
+  color: #60a5fa !important;
+}
+[data-theme="dark"] .pt-card .action-btn:hover svg,
+[data-theme="dark"] .totp-card .action-btn:hover svg {
+  fill: currentColor !important;
+  color: #60a5fa !important;
+}
+[data-theme="dark"] .pt-card .card-password-row,
+[data-theme="dark"] .totp-card .card-code-row {
+  border-top-color: #334155 !important;
+}
+[data-theme="dark"] .pt-card .pw-wrap,
+[data-theme="dark"] .totp-card .code-wrap {
+  background: transparent !important;
+  border: none !important;
+}
+[data-theme="dark"] .pt-card .password-label,
+[data-theme="dark"] .totp-card .code-label {
+  color: #64748b !important;
+}
+[data-theme="dark"] .pt-card .password-value {
+  color: #e2e8f0 !important;
+}
+[data-theme="dark"] .totp-card .code-value {
+  color: #60a5fa !important;
+}
+[data-theme="dark"] .totp-card .code-value:hover {
+  color: #93c5fd !important;
+}
+[data-theme="dark"] .pt-card .time-wrap {
+  color: #64748b !important;
+}
+[data-theme="dark"] .totp-card .timer-bg {
+  stroke: #334155 !important;
+}
+[data-theme="dark"] .totp-card .timer-progress {
+  stroke: #60a5fa !important;
+}
+[data-theme="dark"] .totp-card .timer-text {
+  color: #60a5fa !important;
+}
+[data-theme="dark"] .webdav-backup-item {
+  background: #1e293b !important;
+  border-color: #334155 !important;
+}
+[data-theme="dark"] .webdav-backup-item:hover {
+  background: #334155 !important;
+  border-color: #475569 !important;
+}
+[data-theme="dark"] .webdav-backup-item.is-checked {
+  background: rgba(59, 130, 246, 0.15) !important;
+  border-color: rgba(59, 130, 246, 0.4) !important;
+}
+[data-theme="dark"] .webdav-backup-item .backup-name {
+  color: #e2e8f0 !important;
+}
+[data-theme="dark"] .webdav-backup-item .backup-meta {
+  color: #94a3b8 !important;
+}
+
+/* ========== PluginManager.vue 插件管理深色背景 ========== */
+[data-theme="dark"] .iframe-box {
+  background: #0f172a !important;
+}
+
+/* ========== 全局 el-button 深色主题统一适配 ========== */
+[data-theme="dark"] .el-button {
+  background: #1e293b !important;
+  border-color: #334155 !important;
+  color: #cbd5e1 !important;
+}
+[data-theme="dark"] .el-button:hover,
+[data-theme="dark"] .el-button:focus {
+  background: #334155 !important;
+  border-color: #475569 !important;
+  color: #e2e8f0 !important;
+}
+/* 各种状态按钮在深色下的适配 */
+[data-theme="dark"] .el-button--primary {
+  background: #2563eb !important;
+  border-color: #2563eb !important;
+  color: #ffffff !important;
+}
+[data-theme="dark"] .el-button--primary:hover,
+[data-theme="dark"] .el-button--primary:focus {
+  background: #1d4ed8 !important;
+  border-color: #1d4ed8 !important;
+}
+[data-theme="dark"] .el-button--danger {
+  background: #ef4444 !important;
+  border-color: #ef4444 !important;
+  color: #ffffff !important;
+}
+[data-theme="dark"] .el-button--danger:hover {
+  background: #dc2626 !important;
+  border-color: #dc2626 !important;
+}
+[data-theme="dark"] .el-button--warning {
+  background: #f59e0b !important;
+  border-color: #f59e0b !important;
+  color: #ffffff !important;
+}
+[data-theme="dark"] .el-button--warning:hover {
+  background: #d97706 !important;
+  border-color: #d97706 !important;
+}
+[data-theme="dark"] .el-button--success {
+  background: #10b981 !important;
+  border-color: #10b981 !important;
+  color: #ffffff !important;
+}
+[data-theme="dark"] .el-button--success:hover {
+  background: #059669 !important;
+  border-color: #059669 !important;
+}
+
+/* ========== 全局进度条轨道适配 ========== */
+[data-theme="dark"] .el-progress-bar__outer {
+  background-color: #334155 !important;
+}
+
+/* ========== 下载管理专属细节优化 ========== */
+[data-theme="dark"] .download-manager .downloader-select .el-select__wrapper {
+  background: #0f172a !important;
+  box-shadow: 0 0 0 1px #334155 inset !important;
+}
+[data-theme="dark"] .download-manager .downloader-select .el-select__selected-item span {
+  color: #e2e8f0 !important;
+}
+[data-theme="dark"] .download-manager .download-item .episode {
+  color: #94a3b8 !important;
+}
+[data-theme="dark"] .download-manager .download-item .media-poster.placeholder {
+  border: 1px solid #334155 !important;
+}
+[data-theme="dark"] .el-empty__description p {
+  color: #64748b !important;
+}
+
+/* ========== 全局 el-select 下拉框修补 ========== */
+[data-theme="dark"] .el-select-dropdown {
+  background: #1e293b !important;
+  border-color: #334155 !important;
+}
+[data-theme="dark"] .el-select-dropdown__item,
+[data-theme="dark"] .el-select-dropdown__item span {
+  color: #cbd5e1 !important;
+}
+[data-theme="dark"] .el-select-dropdown__item.is-hovering,
+[data-theme="dark"] .el-select-dropdown__item.is-hovering span {
+  background: rgba(255, 255, 255, 0.08) !important;
+  color: #60a5fa !important;
+}
+[data-theme="dark"] .el-select-dropdown__item.is-selected,
+[data-theme="dark"] .el-select-dropdown__item.is-selected span {
+  color: #60a5fa !important;
+  background: rgba(59, 130, 246, 0.15) !important;
+  font-weight: bold !important;
+}
+
+/* ========== 修复 Sites.vue 卡片操作按钮背景污染 ========== */
+[data-theme="dark"] .sites-root .card-actions {
+  background: transparent !important;
+  border: none !important;
+  padding: 0 !important;
+  box-shadow: none !important;
+}
+
+/* ========== 优化 Sites.vue 同步数据按钮悬浮效果 ========== */
+[data-theme="dark"] .sites-root .action-btn.primary {
+  background: #2563eb !important;
+  color: #ffffff !important;
+  box-shadow: 0 2px 4px rgba(37, 99, 235, 0.2) !important;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1) !important;
+}
+
+[data-theme="dark"] .sites-root .action-btn.primary .btn-icon {
+  transition: transform 0.6s cubic-bezier(0.4, 0, 0.2, 1) !important;
+}
+
+[data-theme="dark"] .sites-root .action-btn.primary:hover {
+  background: #1d4ed8 !important;
+  box-shadow: 0 4px 12px rgba(37, 99, 235, 0.45) !important;
+  transform: translateY(-1px) !important;
+}
+
+[data-theme="dark"] .sites-root .action-btn.primary:hover .btn-icon {
+  transform: rotate(360deg) !important;
 }
 </style>
 

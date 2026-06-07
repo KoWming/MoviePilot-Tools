@@ -22,7 +22,7 @@ import type { Site } from '../shared/types/site';
 import { recognizeCaptchaOffline } from './localOcr';
 import { TOTPStorageService } from '../shared/services/totpStorage';
 import { decryptApiToken, encryptApiToken } from '../shared/secureStorage';
-import { PTCredentialStorageService } from '../shared/services/ptCredentialStorage';
+import { PTCredentialStorageService } from '../shared/services/credentialStorage';
 
 // ===== 安全模块：调试日志开关（生产环境关闭） =====
 const DEBUG = false;
@@ -47,16 +47,16 @@ async function getTrustedOrigins(): Promise<string[]> {
   try {
     const baseURL = (await chrome.storage.local.get([STORAGE_KEYS.BASE_URL]))[STORAGE_KEYS.BASE_URL] as string | undefined;
     if (baseURL) {
-      try { origins.add(new URL(baseURL).origin); } catch {}
+      try { origins.add(new URL(baseURL).origin); } catch { }
     }
-  } catch {}
+  } catch { }
 
   // OCR Host
   try {
     const ocrData = await chrome.storage.local.get([STORAGE_KEYS.OCR_HOST]);
     const ocrHost = (ocrData[STORAGE_KEYS.OCR_HOST] as string) || 'https://movie-pilot.org';
-    try { origins.add(new URL(ocrHost).origin); } catch {}
-  } catch {}
+    try { origins.add(new URL(ocrHost).origin); } catch { }
+  } catch { }
 
   // 已配置站点域名
   try {
@@ -68,7 +68,7 @@ async function getTrustedOrigins(): Promise<string[]> {
         origins.add(`http://${d}`);
       }
     }
-  } catch {}
+  } catch { }
 
   // 下载器地址 + 实时 OCR Host
   try {
@@ -78,7 +78,7 @@ async function getTrustedOrigins(): Promise<string[]> {
     for (const d of dlConfigs) {
       const host = d?.config?.host;
       if (host) {
-        try { origins.add(new URL(host.startsWith('http') ? host : `http://${host}`).origin); } catch {}
+        try { origins.add(new URL(host.startsWith('http') ? host : `http://${host}`).origin); } catch { }
       }
     }
     // 实时 OCR Host（MP API 返回的可能与本地存储不同）
@@ -87,10 +87,10 @@ async function getTrustedOrigins(): Promise<string[]> {
       const ocrData = (ocrResp as any).data as any;
       const liveOcrHost = (ocrData?.value || ocrData?.data?.value || '') as string;
       if (liveOcrHost) {
-        try { origins.add(new URL(liveOcrHost).origin); } catch {}
+        try { origins.add(new URL(liveOcrHost).origin); } catch { }
       }
-    } catch {}
-  } catch {}
+    } catch { }
+  } catch { }
 
   return Array.from(origins);
 }
@@ -182,7 +182,7 @@ async function getToken(): Promise<string | undefined> {
       await chrome.storage.local.set({ [STORAGE_KEYS.TOKEN]: syncToken });
       return syncToken;
     }
-  } catch {}
+  } catch { }
   return undefined;
 }
 
@@ -200,7 +200,7 @@ async function getBaseUrl(): Promise<string> {
       await chrome.storage.local.set({ [STORAGE_KEYS.BASE_URL]: syncBaseUrl });
       return syncBaseUrl;
     }
-  } catch {}
+  } catch { }
   return '';
 }
 
@@ -403,7 +403,7 @@ async function closeAutoOpenedTabs(): Promise<void> {
         }
       }
       await chrome.tabs.remove(tabId);
-    } catch {}
+    } catch { }
   }
   await chrome.storage.local.remove([STORAGE_KEYS.SITE_AUTO_OPEN_TABS]);
 }
@@ -461,7 +461,7 @@ async function recognizeCaptchaByAi(base64Img: string): Promise<string> {
         const encrypted = await encryptApiToken(apiToken);
         await chrome.storage.local.set({ [STORAGE_KEYS.API_TOKEN]: encrypted });
       }
-    } catch {}
+    } catch { }
   }
   if (!apiToken) apiToken = 'moviepilot';
 
@@ -569,7 +569,7 @@ async function refreshAllowedDomains(): Promise<string[]> {
       }
       host = host.toLowerCase();
       if (host && /[a-z0-9-]+(\.[a-z0-9-]+)+/.test(host)) domains.add(host);
-    } catch {}
+    } catch { }
   };
 
   const handleItem = (item: any) => {
@@ -663,7 +663,7 @@ async function handleDirectDownload(msg: any): Promise<{ success: boolean; error
     try {
       const cookies = await chrome.cookies.getAll({ domain: siteDomain });
       cookie = cookies.map(c => `${c.name}=${c.value}`).join('; ');
-    } catch {}
+    } catch { }
   }
 
   debugLog('[MP 直连下载] 下载种子:', torrentUrl.substring(0, 100));
@@ -968,7 +968,9 @@ async function pushToTransmission(
   return { success: true, message: '已推送到 Transmission' };
 }
 
-chrome.runtime.onInstalled.addListener(() => {
+chrome.runtime.onInstalled.addListener(async () => {
+  // 先清除已有的菜单项，避免更新/重载时重复创建
+  await chrome.contextMenus.removeAll();
   chrome.contextMenus.create({ id: 'mp-open', title: 'Open MoviePilot', contexts: ['action'] });
 });
 
@@ -992,17 +994,14 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
   if (msg?.type === 'MP_PT_OPEN_DOWNLOAD') {
     const url = msg?.url as string | undefined;
     const title = msg?.title as string | undefined;
-    // 1) 尝试打开扩展 popup（与 MS 一致的第一步）
-    const tryOpen = chrome.action.openPopup?.();
-    // 2) 无论是否打开成功，向前端发送路由消息，让现有 popup 跳转到下载页并处理 modal
+    const route = { path: '/download', query: { from: 'pt-float', url, title } } as const;
+    // 通过 storage 传递路由到 popup，避免 runtime.sendMessage 在 popup 未就绪时报错
     const navigate = () => {
-      const route = { path: '/download', query: { from: 'pt-float', url, title } } as const;
-      // 写入一个临时路由到 storage，避免监听未就绪时丢消息
       chrome.storage.local.set({ 'mp.pending_route': route }).finally(() => {
-        chrome.runtime.sendMessage({ type: 'NAVIGATE_TO_ROUTE', ...route });
+        sendResponse({ success: true });
       });
-      sendResponse({ success: true });
     };
+    const tryOpen = chrome.action.openPopup?.();
     if (tryOpen && typeof (tryOpen as Promise<void>).then === 'function') {
       (tryOpen as Promise<void>).then(navigate).catch(navigate);
       return true;
@@ -1257,27 +1256,27 @@ chrome.storage.onChanged.addListener(async (changes, area) => {
     const baseUrlChanged = !!changes[STORAGE_KEYS.BASE_URL];
     const tokenChanged = !!changes[STORAGE_KEYS.TOKEN];
     if (baseUrlChanged || tokenChanged) {
-      try { await refreshAllowedDomains(); } catch {}
+      try { await refreshAllowedDomains(); } catch { }
     }
   }
   if (area === 'local' && changes[STORAGE_KEYS.COOKIE_UA_AUTO_UPDATE]) {
-    try { await configureCookieUaAutoUpdateAlarm(); } catch {}
+    try { await configureCookieUaAutoUpdateAlarm(); } catch { }
   }
   if (area === 'local' && changes[STORAGE_KEYS.SITE_AUTO_OPEN]) {
-    try { await configureSiteAutoOpenAlarm(); } catch {}
+    try { await configureSiteAutoOpenAlarm(); } catch { }
   }
 });
 
 // 安装后尝试拉取一次（若已配置）
 chrome.runtime.onInstalled.addListener(async () => {
-  try { await refreshAllowedDomains(); } catch {}
-  try { await initializeCookieUaAutoUpdate(); } catch {}
-  try { await initializeSiteAutoOpen(); } catch {}
+  try { await refreshAllowedDomains(); } catch { }
+  try { await initializeCookieUaAutoUpdate(); } catch { }
+  try { await initializeSiteAutoOpen(); } catch { }
 });
 
 chrome.runtime.onStartup.addListener(async () => {
-  try { await initializeCookieUaAutoUpdate(); } catch {}
-  try { await initializeSiteAutoOpen(); } catch {}
+  try { await initializeCookieUaAutoUpdate(); } catch { }
+  try { await initializeSiteAutoOpen(); } catch { }
 });
 
 chrome.alarms.onAlarm.addListener((alarm) => {

@@ -85,16 +85,152 @@
     }, 500);
   }
 
+  let currentTheme: 'light' | 'dark' = 'light';
+  let themeObserver: MutationObserver | null = null;
+
+  function getQueryTheme(): 'light' | 'dark' | null {
+    try {
+      const url = new URL(location.href);
+      let theme = url.searchParams.get('theme') || new URLSearchParams(url.hash.split('?')[1] || '').get('theme');
+      if (theme === 'dark' || theme === 'light') {
+        return theme;
+      }
+    } catch { }
+    return null;
+  }
+
+  // 立即在运行初期根据 URL 注入初始主题，防止首屏加载闪白
+  const initialTheme = getQueryTheme();
+  if (initialTheme && isInIframe() && isPluginsPage()) {
+    currentTheme = initialTheme;
+    try {
+      const root = document.documentElement;
+      if (initialTheme === 'dark') {
+        root.classList.remove('v-theme--light', 'theme-light');
+        root.classList.add('v-theme--dark', 'theme-dark');
+        root.setAttribute('data-theme', 'dark');
+        root.style.colorScheme = 'dark';
+      }
+      // 立即启动主题纠正观察，确保在 DOM 加载早期捕获所有亮色组件并修正
+      startThemeObserver();
+      ensureStyleAtBottom();
+    } catch { }
+  }
+
+  function correctVuetifyThemes() {
+    try {
+      if (currentTheme === 'dark') {
+        const lightElements = document.querySelectorAll('.v-theme--light');
+        lightElements.forEach((el) => {
+          el.classList.remove('v-theme--light');
+          el.classList.add('v-theme--dark');
+        });
+      } else if (currentTheme === 'light') {
+        const darkElements = document.querySelectorAll('.v-theme--dark');
+        darkElements.forEach((el) => {
+          el.classList.remove('v-theme--dark');
+          el.classList.add('v-theme--light');
+        });
+      }
+    } catch { }
+  }
+
+  function ensureStyleAtBottom() {
+    try {
+      const style = document.getElementById('mp-embed-minimal-style');
+      if (style) {
+        const parent = style.parentElement;
+        if (parent && parent.lastElementChild !== style) {
+          parent.appendChild(style);
+        }
+      }
+    } catch { }
+  }
+
+  function startThemeObserver() {
+    if (!isInIframe() || themeObserver) return;
+    try {
+      themeObserver = new MutationObserver(() => {
+        // 1. 修正 Vuetify 组件类名
+        correctVuetifyThemes();
+
+        // 2. 修正根属性被篡改的问题
+        const root = document.documentElement;
+        if (currentTheme === 'dark' && root.getAttribute('data-theme') !== 'dark') {
+          root.setAttribute('data-theme', 'dark');
+          root.classList.remove('v-theme--light', 'theme-light');
+          root.classList.add('v-theme--dark', 'theme-dark');
+          root.style.colorScheme = 'dark';
+        } else if (currentTheme === 'light' && root.getAttribute('data-theme') !== 'light') {
+          root.setAttribute('data-theme', 'light');
+          root.classList.remove('v-theme--dark', 'theme-dark');
+          root.classList.add('v-theme--light', 'theme-light');
+          root.style.colorScheme = 'light';
+        }
+
+        // 3. 确保我们的样式表在最下方以防被级联覆盖
+        ensureStyleAtBottom();
+      });
+      themeObserver.observe(document.documentElement, {
+        childList: true,
+        subtree: true,
+        attributes: true,
+        attributeFilter: ['class', 'data-theme']
+      });
+    } catch { }
+  }
+
+  function applyTheme(theme: 'light' | 'dark') {
+    currentTheme = theme;
+    try {
+      const root = document.documentElement;
+      const body = document.body || document.getElementsByTagName('body')[0];
+
+      if (theme === 'dark') {
+        root.classList.remove('v-theme--light', 'theme-light');
+        root.classList.add('v-theme--dark', 'theme-dark');
+        root.setAttribute('data-theme', 'dark');
+        root.style.colorScheme = 'dark';
+
+        if (body) {
+          body.classList.remove('v-theme--light', 'theme-light');
+          body.classList.add('v-theme--dark', 'theme-dark');
+          body.setAttribute('data-theme', 'dark');
+        }
+      } else {
+        root.classList.remove('v-theme--dark', 'theme-dark');
+        root.classList.add('v-theme--light', 'theme-light');
+        root.setAttribute('data-theme', 'light');
+        root.style.colorScheme = 'light';
+
+        if (body) {
+          body.classList.remove('v-theme--dark', 'theme-dark');
+          body.classList.add('v-theme--light', 'theme-light');
+          body.setAttribute('data-theme', 'light');
+        }
+      }
+      correctVuetifyThemes();
+      ensureStyleAtBottom();
+    } catch { }
+  }
+
   function initAutoLogin() {
     if (!isInIframe()) return;
-    // 监听父窗口发来的凭据
+
+    startThemeObserver();
+
+    // 监听父窗口发来的消息 (凭据与主题)
     window.addEventListener('message', (event: MessageEvent) => {
       if (event.data?.type === 'MP_IFRAME_AUTH' && event.data?.username && event.data?.password) {
         startLoginObserver(event.data.username, event.data.password);
       }
+      if (event.data?.type === 'MP_THEME_CHANGE' && event.data?.theme) {
+        applyTheme(event.data.theme);
+      }
     });
-    // 主动向父窗口请求凭据
+    // 主动向父窗口请求凭据和主题
     window.parent.postMessage({ type: 'MP_IFRAME_NEED_AUTH' }, '*');
+    window.parent.postMessage({ type: 'MP_IFRAME_NEED_THEME' }, '*');
   }
 
   if (document.readyState === 'loading') {
@@ -143,8 +279,38 @@
         /* 可选：缩小按钮与图标高度，避免撑高容器 */
         header.layout-navbar .v-btn { min-height: 32px !important; height: 32px !important; }
         header.layout-navbar .v-icon { font-size: 22px !important; height: 22px !important; width: 22px !important; }
+
+        /* 深色主题兜底，确保在iframe里整体底色是暗色的，并强行覆写首屏加载遮罩与容器 */
+        html[data-theme="dark"],
+        html[data-theme="dark"] body,
+        html[data-theme="dark"] #app,
+        html[data-theme="dark"] .v-application,
+        html[data-theme="dark"] [class*="loading"],
+        html[data-theme="dark"] [id*="loading"] {
+          background-color: #121212 !important;
+          color: #e2e8f0 !important;
+        }
+
+        /* 强力覆写：当父级 html 带有 data-theme="dark" 时，任何未被即时纠正的 v-theme--light 容器也必须应用深色变量 */
+        html[data-theme="dark"] .v-theme--light {
+          --v-theme-background: 18, 18, 18 !important;
+          --v-theme-surface: 30, 30, 30 !important;
+          --v-theme-on-background: 226, 232, 240 !important;
+          --v-theme-on-surface: 226, 232, 240 !important;
+          background-color: #121212 !important;
+          color: #e2e8f0 !important;
+        }
+        html[data-theme="dark"] .v-theme--light .v-card,
+        html[data-theme="dark"] .v-theme--light .v-table,
+        html[data-theme="dark"] .v-theme--light .v-sheet,
+        html[data-theme="dark"] .v-theme--light .v-list,
+        html[data-theme="dark"] .v-theme--light .v-list-item {
+          background-color: #1e1e1e !important;
+          color: #e2e8f0 !important;
+          border-color: #334155 !important;
+        }
       `;
-      document.head.appendChild(style);
+      (document.head || document.documentElement).appendChild(style);
     } catch { }
   }
 
@@ -383,7 +549,7 @@
   let pendingUsername = '';
   let pendingPassword = '';
   let checkTimeout: number | null = null;
-  
+
   function findPTLoginFields() {
     try {
       const inputs = Array.from(document.querySelectorAll('input'));
@@ -399,10 +565,10 @@
         const type = (input.type || 'text').toLowerCase();
         const forbiddenTypes = ['password', 'checkbox', 'radio', 'submit', 'button', 'hidden', 'file', 'image', 'reset'];
         if (forbiddenTypes.includes(type)) return false;
-        
+
         const isVisible = input.offsetWidth > 0 || input.offsetHeight > 0;
         if (!isVisible) return false;
-        
+
         return true;
       });
 
@@ -437,7 +603,7 @@
   function fillPTCredentials(username: string, password: string) {
     const { userInput, pwInput } = findPTLoginFields();
     if (!userInput || !pwInput) return false;
-    
+
     if (userInput.value && pwInput.value) return false;
 
     try {
@@ -580,11 +746,11 @@
 
       const textWrap = document.createElement('div');
       textWrap.style.cssText = 'flex: 1 !important; min-width: 0 !important;';
-      
+
       const title = document.createElement('div');
       title.textContent = 'MoviePilot Tools';
       title.style.cssText = 'font-size: 12px !important; font-weight: 700 !important; color: #0f172a !important; text-align: left !important; line-height: 1.3 !important;';
-      
+
       const desc = document.createElement('div');
       desc.textContent = `保存 ${domain} 的账号密码？`;
       desc.style.cssText = 'font-size: 11px !important; color: #64748b !important; margin-top: 1px !important; text-align: left !important; line-height: 1.3 !important; white-space: nowrap !important; overflow: hidden !important; text-overflow: ellipsis !important;';
@@ -647,13 +813,13 @@
 
       btnRow.appendChild(cancelBtn);
       btnRow.appendChild(saveBtn);
-      
+
       banner.appendChild(logo);
       banner.appendChild(textWrap);
       banner.appendChild(btnRow);
-      
+
       shadow.appendChild(banner);
-      
+
       setTimeout(() => {
         host.style.setProperty('right', '20px', 'important');
       }, 100);
@@ -664,7 +830,7 @@
           host.remove();
         }, 500);
       }
-    } catch {}
+    } catch { }
   }
 
   function setupLoginDetection() {
@@ -678,7 +844,7 @@
           sessionStorage.setItem('mp_pending_password', pendingPassword);
           sessionStorage.setItem('mp_pending_domain', window.location.hostname);
           sessionStorage.setItem('mp_pending_time', Date.now().toString());
-        } catch {}
+        } catch { }
       }
     };
 
@@ -722,16 +888,16 @@
     document.addEventListener('click', (e) => {
       let el = e.target as HTMLElement | null;
       let isSubmitBtn = false;
-      
+
       for (let i = 0; i < 4 && el; i++) {
         const text = (el.textContent || '').trim();
         const value = el instanceof HTMLInputElement ? el.value : '';
-        const isClickable = el.tagName === 'BUTTON' || 
-                            el.tagName === 'A' || 
-                            (el.tagName === 'INPUT' && ['submit', 'button'].includes((el as HTMLInputElement).type)) ||
-                            el.classList.contains('btn') ||
-                            el.style.cursor === 'pointer';
-        
+        const isClickable = el.tagName === 'BUTTON' ||
+          el.tagName === 'A' ||
+          (el.tagName === 'INPUT' && ['submit', 'button'].includes((el as HTMLInputElement).type)) ||
+          el.classList.contains('btn') ||
+          el.style.cursor === 'pointer';
+
         if (isClickable) {
           if (
             /登\s*录|登\s*陆|提\s*交|login|sign\s*in|submit|确\s*定|进\s*入/i.test(text) ||
@@ -756,7 +922,7 @@
     try {
       const storedTimeStr = sessionStorage.getItem('mp_pending_time');
       if (!storedTimeStr) return;
-      
+
       const storedTime = parseInt(storedTimeStr);
       if (Date.now() - storedTime > 120 * 1000) {
         clearPendingCreds();
@@ -784,7 +950,7 @@
           });
         }
       }
-    } catch {}
+    } catch { }
   }
 
   function clearPendingCreds() {
@@ -793,7 +959,7 @@
       sessionStorage.removeItem('mp_pending_password');
       sessionStorage.removeItem('mp_pending_domain');
       sessionStorage.removeItem('mp_pending_time');
-    } catch {}
+    } catch { }
   }
 
   function initPTAutofillAndDetection() {
@@ -818,14 +984,14 @@
           if (resp?.success && resp.credential) {
             const { username, password } = resp.credential;
             fillPTCredentials(username, password);
-            
+
             const autofillObserver = new MutationObserver(() => {
               if (fillPTCredentials(username, password)) {
                 autofillObserver.disconnect();
               }
             });
             autofillObserver.observe(document.documentElement || document.body, { childList: true, subtree: true });
-            
+
             setTimeout(() => {
               autofillObserver.disconnect();
             }, 10000);

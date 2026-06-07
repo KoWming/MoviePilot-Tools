@@ -216,8 +216,11 @@
     </section>
 
     <section class="footer-section">
-      <div class="footer-text">项目主页</div>
-      <a href="https://movie-pilot.org/" target="_blank" class="link">MoviePilot</a>
+      <div class="footer-text">项目主页：</div>
+      <div class="footer-links">
+        <a href="https://movie-pilot.org/" target="_blank" class="link">MoviePilot</a>
+        <a href="https://github.com/KoWming/MoviePilot-Tools" target="_blank" class="link">MoviePilot-Tools</a>
+      </div>
     </section>
   </div>
 </template>
@@ -457,14 +460,20 @@ const navItems = [
   font-size: 12px;
   font-weight: 700;
   color: #64748b;
+  flex-shrink: 0;
+}
+
+.footer-links {
+  display: flex;
+  gap: 6px;
 }
 
 .link {
-  font-size: 12px;
+  font-size: 10px;
   font-weight: 700;
   color: #2563eb;
   text-decoration: none;
-  padding: 5px 10px;
+  padding: 3px 8px;
   border-radius: 999px;
   background: #eff6ff;
   border: 1px solid #bfdbfe;

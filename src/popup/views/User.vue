@@ -18,13 +18,13 @@
         <!-- 统计信息 -->
         <div class="stats-section">
           <div class="stats-grid">
+            <div class="stat-item stat-supporting">
+              <div class="stat-num">{{ precomputedStats.supportingSites ?? '-' }}</div>
+              <div class="stat-label">已适配站点</div>
+            </div>
             <div class="stat-item stat-config">
               <div class="stat-num">{{ precomputedStats.configSites ?? '-' }}</div>
               <div class="stat-label">已配置站点</div>
-            </div>
-            <div class="stat-item stat-enabled">
-              <div class="stat-num">{{ precomputedStats.enabledSites ?? '-' }}</div>
-              <div class="stat-label">已启用站点</div>
             </div>
             <div class="stat-item stat-cookie">
               <div class="stat-num">{{ precomputedStats.cookieCount ?? '-' }}</div>
@@ -84,7 +84,7 @@ const loading = ref(false);
 // 预计算的统计数据 - 参考站点数据页面的优化方法
 const precomputedStats = ref({
   configSites: 0,
-  enabledSites: 0,
+  supportingSites: 0,
   cookieCount: 0,
   pending: 0,
   systemVersion: '',
@@ -165,6 +165,17 @@ async function fetchSiteStats() {
     
     // 预计算统计数据
     const enabledSites = sitesList.filter((site: any) => site.is_active !== false).length;
+    // 获取已适配站点数
+    let supportingSites = 0;
+    try {
+      const supportingResp = await client.get('/api/v1/site/supporting');
+      const supportingData = supportingResp.data;
+      if (supportingData && typeof supportingData === 'object') {
+        supportingSites = Object.keys(supportingData).length;
+      }
+    } catch (e) {
+      console.warn('获取已适配站点数失败:', e);
+    }
     const configSites = sitesList.filter((site: any) => 
       site.cookie || site.apikey || site.token
     ).length;
@@ -174,7 +185,7 @@ async function fetchSiteStats() {
     // 更新预计算统计数据
     precomputedStats.value = {
       ...precomputedStats.value,
-      enabledSites,
+      supportingSites,
       configSites,
       cookieCount,
       pending
@@ -322,9 +333,9 @@ onMounted(refreshAll);
 .stat-config .stat-num { color: #1976d2; }
 .stat-config { background: linear-gradient(135deg, #e3f2fd 0%, #f8f9fa 100%); }
 
-/* 已启用站点 - 绿色主题 */
-.stat-enabled .stat-num { color: #388e3c; }
-.stat-enabled { background: linear-gradient(135deg, #e8f5e8 0%, #f8f9fa 100%); }
+/* 已适配站点 - 青色主题 */
+.stat-supporting .stat-num { color: #00838f; }
+.stat-supporting { background: linear-gradient(135deg, #e0f7fa 0%, #e8f5e9 100%); }
 
 /* Cookie数 - 橙色主题 */
 .stat-cookie .stat-num { color: #f57c00; }
