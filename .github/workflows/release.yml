@@ -4,6 +4,8 @@ on:
   push:
     tags:
       - 'v*'
+    paths:
+      - 'version.json'
   workflow_dispatch:
 
 permissions:
@@ -80,7 +82,7 @@ jobs:
           Write-Host $notes
 
       - name: 创建 GitHub Release 发布版本
-        if: startsWith(github.ref, 'refs/tags/v') || github.event_name == 'workflow_dispatch'
+        if: startsWith(github.ref, 'refs/tags/v') || github.event_name == 'workflow_dispatch' || github.event_name == 'push'
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ startsWith(github.ref, 'refs/tags/v') && github.ref_name || format('v{0}', steps.release_notes.outputs.version) }}
