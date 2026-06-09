@@ -7,6 +7,10 @@
 </template>
 
 <script setup lang="ts">
+// ============================================================
+// 插件管理器视图
+// 内嵌 iframe 加载 MoviePilot 原生插件管理页面
+// ============================================================
 import { ref, onMounted, onUnmounted, watch } from 'vue';
 import { STORAGE_KEYS } from '../../shared/constants';
 import { loadCredentials } from '../../shared/secureStorage';

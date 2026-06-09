@@ -1,3 +1,8 @@
+// ============================================================
+// TOTP 存储服务
+// 加密存储 TOTP 站点配置，支持 CRUD、导入/导出
+// ============================================================
+
 import type { TOTPSite, TOTPConfig, TOTPExportData } from '../types/totp';
 import { TOTP_STORAGE_KEYS } from '../constants';
 import { encryptObject, decryptObject } from '../secureStorage';

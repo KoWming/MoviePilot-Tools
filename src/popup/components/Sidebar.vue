@@ -4,52 +4,112 @@
       <img src="/icons/icon.png" alt="logo" />
     </div>
     <div class="menu">
-      <button :class="['item', current==='site-management' && 'active']" @click="$emit('navigate','site-management')" title="站点管理">
-        <svg viewBox="0 0 24 24"><path :d="mdiWeb"/></svg>
-      </button>
-      <button :class="['item', current==='sites' && 'active']" @click="$emit('navigate','sites')" title="站点数据">
-        <svg viewBox="0 0 24 24"><path :d="mdiChartLine"/></svg>
-      </button>
-      <button :class="['item', current==='download-manager' && 'active']" @click="$emit('navigate','download-manager')" title="下载管理">
-        <svg viewBox="0 0 24 24"><path :d="mdiDownload"/></svg>
-      </button>
-      <button :class="['item', current==='totp-manager' && 'active']" @click="$emit('navigate','totp-manager')" title="两步验证">
-        <svg viewBox="0 0 24 24"><path :d="mdiShieldKey"/></svg>
-      </button>
-      <button :class="['item', current==='pt-creds-manager' && 'active']" @click="$emit('navigate','pt-creds-manager')" title="凭据管理">
-        <svg viewBox="0 0 24 24"><path :d="mdiKeyOutline"/></svg>
-      </button>
-      <button :class="['item', current==='plugin-manager' && 'active']" @click="$emit('navigate','plugin-manager')" title="插件管理">
-        <svg viewBox="0 0 24 24"><path :d="mdiPuzzleOutline"/></svg>
-      </button>
-      <button :class="['item', current==='dashboard' && 'active']" @click="$emit('navigate','dashboard')" title="用户信息">
-        <svg viewBox="0 0 24 24"><path :d="mdiAccountCircle"/></svg>
-      </button>
-      <button :class="['item', current==='settings' && 'active']" @click="$emit('navigate','settings')" title="设置">
-        <svg viewBox="0 0 24 24"><path :d="mdiCogOutline"/></svg>
-      </button>
-      <button :class="['item', current==='about' && 'active']" @click="$emit('navigate','about')" title="关于">
-        <svg viewBox="0 0 24 24"><path :d="mdiInformationOutline"/></svg>
+      <button
+        v-for="item in menuItems"
+        :key="item.id"
+        :class="['item', current === item.id && 'active']"
+        @click="$emit('navigate', item.id)"
+        :title="item.label"
+      >
+        <svg viewBox="0 0 24 24"><path :d="item.icon"/></svg>
       </button>
     </div>
   </aside>
 </template>
 
 <script setup lang="ts">
-import { mdiAccountCircle, mdiChartLine, mdiWeb, mdiShieldKey, mdiPuzzleOutline, mdiDownload, mdiInformationOutline, mdiCogOutline, mdiKeyOutline } from '@mdi/js';
-defineProps<{ current: 'dashboard'|'sites'|'site-management'|'totp-manager'|'pt-creds-manager'|'plugin-manager'|'download-manager'|'settings'|'about' }>();
-defineEmits(['navigate','openWeb']);
+// ============================================================
+// 侧边栏导航组件
+// 显示用户头像、导航菜单项、主题切换
+// ============================================================
+import {
+  mdiAccountCircle, mdiChartLine, mdiWeb, mdiShieldKey,
+  mdiPuzzleOutline, mdiDownload, mdiInformationOutline,
+  mdiCogOutline, mdiKeyOutline
+} from '@mdi/js';
+
+// ==================== 菜单配置 ====================
+type PageId = 'dashboard' | 'sites' | 'site-management' | 'totp-manager' | 'pt-creds-manager' | 'plugin-manager' | 'download-manager' | 'settings' | 'about';
+
+const menuItems: { id: PageId; icon: string; label: string }[] = [
+  { id: 'site-management', icon: mdiWeb, label: '站点管理' },
+  { id: 'sites', icon: mdiChartLine, label: '站点数据' },
+  { id: 'download-manager', icon: mdiDownload, label: '下载管理' },
+  { id: 'totp-manager', icon: mdiShieldKey, label: '两步验证' },
+  { id: 'pt-creds-manager', icon: mdiKeyOutline, label: '凭据管理' },
+  { id: 'plugin-manager', icon: mdiPuzzleOutline, label: '插件管理' },
+  { id: 'dashboard', icon: mdiAccountCircle, label: '用户信息' },
+  { id: 'settings', icon: mdiCogOutline, label: '设置' },
+  { id: 'about', icon: mdiInformationOutline, label: '关于' },
+];
+
+// ==================== Props / Emits ====================
+defineProps<{ current: PageId }>();
+defineEmits(['navigate', 'openWeb']);
 </script>
 
 <style scoped>
-.sidebar { width: 48px; min-width: 48px; flex: 0 0 48px; background: #fff; border-right: 1px solid rgba(0,0,0,.06); display:flex; flex-direction:column; align-items:center; padding:8px 6px; gap:8px; }
-.logo img { width: 28px; height: 28px; cursor: pointer; }
-.menu { display:flex; flex-direction:column; gap:8px; }
-.item { position: relative; width: 34px; height: 34px; border-radius: 8px; border: none; background: transparent; display:flex; align-items:center; justify-content:center; cursor:pointer; transition: transform 0.2s cubic-bezier(0.4, 0, 0.2, 1); }
-.item svg { width: 18px; height: 18px; fill: currentColor; color:#606266; transition: color 0.2s ease; }
-.item.active { color:#1677ff; }
-.item.active svg { color:#1677ff; }
-.item:hover { transform: scale(1.1); background: transparent; }
+.sidebar {
+  width: 48px;
+  min-width: 48px;
+  flex: 0 0 48px;
+  background: #fff;
+  border-right: 1px solid rgba(0, 0, 0, 0.06);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 8px 6px;
+  gap: 8px;
+}
+
+.logo img {
+  width: 28px;
+  height: 28px;
+  cursor: pointer;
+}
+
+.menu {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.item {
+  position: relative;
+  width: 34px;
+  height: 34px;
+  border-radius: 8px;
+  border: none;
+  background: transparent;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: transform 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.item svg {
+  width: 18px;
+  height: 18px;
+  fill: currentColor;
+  color: #606266;
+  transition: color 0.2s ease;
+}
+
+.item.active {
+  color: #1677ff;
+}
+
+.item.active svg {
+  color: #1677ff;
+}
+
+.item:hover {
+  transform: scale(1.1);
+  background: transparent;
+}
+
+/* 活跃菜单项左侧指示条 */
 .item::before {
   content: "";
   position: absolute;
@@ -64,6 +124,7 @@ defineEmits(['navigate','openWeb']);
   opacity: 0;
   box-shadow: 0 0 8px rgba(22, 119, 255, 0.6);
 }
+
 .item.active::before {
   transform: translateY(-50%) scaleY(1);
   opacity: 1;

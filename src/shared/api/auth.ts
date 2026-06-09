@@ -1,14 +1,21 @@
+// ============================================================
+// MP 登录认证 API
+// 通过 OAuth2 密码表单登录获取 Bearer Token
+// ============================================================
+
 import axios from 'axios';
 
+// 登录响应接口
 export interface LoginResponse {
   access_token: string;
-  token_type: string; // 'bearer'
+  token_type: string;
   user_id?: number;
   user_name?: string;
   avatar?: string;
   super_user?: boolean;
 }
 
+// 密码登录（OAuth2PasswordRequestForm 兼容）
 export async function loginByPassword(params: {
   baseURL: string;
   username: string;
@@ -21,8 +28,7 @@ export async function loginByPassword(params: {
   body.set('username', username);
   body.set('password', password);
   if (otp_password) body.set('otp_password', otp_password);
-  // OAuth2PasswordRequestForm 需要 grant_type
-  // FastAPI 的 OAuth2PasswordRequestForm 默认允许为空；如后端强校验可加：body.set('grant_type','password')
+
   const resp = await axios.post(url, body, {
     headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
     timeout: 15000
@@ -30,7 +36,7 @@ export async function loginByPassword(params: {
   return resp.data as LoginResponse;
 }
 
-// 这些函数已移动到 shared/utils/storage.ts
-// 为了向后兼容，重新导出
+// ===== 向后兼容导出 =====
+// getBaseUrl / getToken 已迁移至 shared/utils/storage.ts
+// 以下重新导出用于兼容外部引用（TOTPManager / SiteManagement / Settings）
 export { getBaseUrl, getToken } from '../utils/storage';
-

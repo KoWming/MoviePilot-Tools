@@ -1,17 +1,25 @@
+// ============================================================
+// 站点自动打开配置模块
+// 定时批量打开 PT 站点页面以维持登录状态（保活）
+// ============================================================
+
 import { STORAGE_KEYS } from './constants';
 
+// 站点自动打开配置接口
 export interface SiteAutoOpenConfig {
-  monthlyFirstEnabled: boolean;
-  intervalEnabled: boolean;
-  intervalDays: number;
-  autoCloseEnabled: boolean;
-  keepLoginTabsEnabled: boolean;
-  closeDelayMinutes: number;
+  monthlyFirstEnabled: boolean;   // 每月首次启用
+  intervalEnabled: boolean;       // 定时启用
+  intervalDays: number;           // 定时间隔（天）
+  autoCloseEnabled: boolean;      // 自动关闭已打开标签页
+  keepLoginTabsEnabled: boolean;  // 保留登录页标签
+  closeDelayMinutes: number;      // 关闭延迟（分钟）
 }
 
+// Chrome Alarm 名称
 export const SITE_AUTO_OPEN_ALARM = 'mp-site-auto-open';
 export const SITE_AUTO_OPEN_CLOSE_TABS_ALARM = 'mp-site-auto-open-close-tabs';
 
+// 定时间隔预设值
 export const SITE_AUTO_OPEN_INTERVAL_PRESETS = [
   { label: '1 天', value: 1 },
   { label: '3 天', value: 3 },

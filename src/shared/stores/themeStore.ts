@@ -1,9 +1,19 @@
+// ============================================================
+// 主题管理响应式 Store
+// 支持 自动/亮色/暗色 三种模式，监听系统主题变化
+// ============================================================
+
 import { reactive } from 'vue';
 
+// 主题模式类型
 export type ThemeMode = 'auto' | 'light' | 'dark';
 
+// 存储键名
 const STORAGE_KEY = 'mp.theme';
 
+// ===== 主题检测与初始化 =====
+
+// 获取系统主题偏好
 function getSystemTheme(): 'light' | 'dark' {
   if (typeof window !== 'undefined' && window.matchMedia) {
     return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
@@ -11,6 +21,7 @@ function getSystemTheme(): 'light' | 'dark' {
   return 'light';
 }
 
+// 从 localStorage 加载已保存的主题设置
 function loadSavedTheme(): ThemeMode {
   try {
     const data = localStorage.getItem(STORAGE_KEY);
@@ -21,12 +32,15 @@ function loadSavedTheme(): ThemeMode {
   return 'auto';
 }
 
+// 主题状态（Vue 3 响应式对象）
 export const themeState = reactive({
-  mode: loadSavedTheme() as ThemeMode,
-  effective: 'light' as 'light' | 'dark'
+  mode: loadSavedTheme() as ThemeMode,           // 用户设置的主题模式
+  effective: 'light' as 'light' | 'dark'         // 实际生效的主题
 });
 
-// 计算实际主题
+// ===== 主题计算与应用 =====
+
+// 计算实际生效的主题（auto 模式下根据系统偏好决定）
 function computeEffective(): void {
   if (themeState.mode === 'auto') {
     themeState.effective = getSystemTheme();
@@ -36,7 +50,7 @@ function computeEffective(): void {
   applyTheme(themeState.effective);
 }
 
-// 应用主题到 DOM
+// 将主题应用到 DOM（data-theme 属性 + CSS 类名）
 function applyTheme(theme: 'light' | 'dark'): void {
   const root = document.documentElement;
   root.classList.remove('theme-light', 'theme-dark');
@@ -44,8 +58,10 @@ function applyTheme(theme: 'light' | 'dark'): void {
   root.setAttribute('data-theme', theme);
 }
 
-// 监听系统主题变化（仅 auto 模式）
+// ===== 系统主题监听 =====
+
 let mediaQuery: MediaQueryList | null = null;
+
 function watchSystemTheme(): void {
   if (mediaQuery) {
     mediaQuery.removeEventListener('change', onSystemThemeChange);
@@ -60,10 +76,13 @@ function onSystemThemeChange(): void {
   }
 }
 
-// 初始化
+// 初始化：计算一次主题并开始监听
 computeEffective();
 watchSystemTheme();
 
+// ===== 公开 API =====
+
+// 切换主题模式
 export function setTheme(mode: ThemeMode): void {
   themeState.mode = mode;
   try {

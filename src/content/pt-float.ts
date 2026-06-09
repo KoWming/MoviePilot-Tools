@@ -1,10 +1,8 @@
-// Floating PT download button (content script)
-// - Injects a fixed button on supported PT domains
-// - Sends a message to background with current detail page URL
+// PT 站点浮动下载按钮（内容脚本）
+// - 仅在已配置的 PT 站点种子详情页注入固定按钮
+// - 点击后将当前详情页地址发送给后台脚本打开下载面板
 
 (function () {
-  // 硬编码域名已停用，完全使用本地缓存的 MP 站点域名
-  // const HARDCODED_ALLOW_DOMAINS: string[] = [ ... ];
 
   const STORAGE_KEYS = {
     ALLOWED_DOMAINS: 'mp.allowed_domains',
@@ -43,13 +41,13 @@
     try {
       const currentHostname = location.hostname.toLowerCase();
       console.log('MP Extension: 检查站点支持状态，当前域名:', currentHostname);
-      
+
       // 1) 先读取本地缓存的 MP 站点域名
       const cached = await getAllowedDomainsFromCache();
       if (cached && cached.length) {
         const ok = matchesAllowed(currentHostname, cached);
         if (ok) return true;
-        // 缓存存在但未命中，尝试同步刷新一次（短超时），以覆盖刚更新的站点
+        // 缓存存在但未命中时，短暂触发一次同步刷新，兼容刚更新的站点配置
         try {
           const domains = await new Promise<string[] | null>((resolve) => {
             let done = false;
@@ -65,32 +63,30 @@
             } catch { resolve(null); }
           });
           if (domains && domains.length && matchesAllowed(currentHostname, domains)) return true;
-        } catch {}
+        } catch { }
       }
 
-      // 2) 若缓存为空或未命中，尝试触发一次后台刷新（非阻塞提示），随后返回不支持
-      try { chrome.runtime.sendMessage({ type: 'MP_REFRESH_ALLOWED_DOMAINS' }); } catch {}
+      // 2) 缓存为空或刷新后仍未命中时，后台异步刷新一次，并按当前结果判定为不支持
+      try { chrome.runtime.sendMessage({ type: 'MP_REFRESH_ALLOWED_DOMAINS' }); } catch { }
       return false;
-    
-    // 添加catch块来处理可能的错误
     } catch (error) {
       console.error('MP Extension: 检查站点支持状态失败', error);
       return false;
     }
   }
 
-  // 检测是否是种子详情页面 - 采用MS扩展的精确匹配方式
+  // 判断当前页面是否为种子详情页（参考 MS 扩展的匹配规则）
   function isTorrentDetailPage(): boolean {
     try {
       const url = location.href;
-      
-      // 添加调试信息
+
+      // 输出当前页面信息，便于排查详情页识别问题
       console.log('MP Extension: 检测页面类型', {
         url: location.href,
         hostname: location.hostname
       });
-      
-      // 精确的种子详情页URL模式 - 参考MS扩展的实现
+
+      // 常见 PT 站点的种子详情页 URL 特征
       const detailPatterns = [
         '/details.php?id=',
         '/detail/',
@@ -107,15 +103,15 @@
         '?torrentid=',
         '&torrentid='
       ];
-      
-      // 检查URL是否包含种子详情页特征
+
+      // 命中任一特征即视为种子详情页
       for (const pattern of detailPatterns) {
         if (url.includes(pattern)) {
           console.log('MP Extension: 匹配到种子详情页模式', pattern);
           return true;
         }
       }
-      
+
       console.log('MP Extension: 未检测到种子详情页特征');
       return false;
     } catch (error) {
@@ -124,25 +120,25 @@
     }
   }
 
-  // 提取页面标题
+  // 提取页面标题，作为下载面板的默认展示名称
   function extractPageTitle(): string {
     try {
-      // 1. 尝试从页面标题标签获取
+      // 1. 优先读取浏览器标题
       const pageTitle = document.title;
       if (pageTitle && pageTitle.trim() && !pageTitle.includes('404') && !pageTitle.includes('Not Found')) {
-        // 清理标题，移除站点名称后缀
+        // 移除常见站点名称后缀，保留资源标题主体
         const cleanTitle = pageTitle
           .replace(/\s*-\s*[^-]+$/, '') // 移除 "- 站点名" 后缀
           .replace(/\s*::\s*[^:]+$/, '') // 移除 ":: 站点名" 后缀
           .replace(/\s*\|\s*[^|]+$/, '') // 移除 "| 站点名" 后缀
           .trim();
-        
+
         if (cleanTitle && cleanTitle.length > 3) {
           return cleanTitle;
         }
       }
 
-      // 2. 尝试从常见的种子标题元素获取
+      // 2. 兜底读取页面内常见标题元素
       const titleSelectors = [
         'h1.title',
         'h1',
@@ -164,14 +160,14 @@
         }
       }
 
-      // 3. 尝试从URL参数获取标题
+      // 3. 再尝试从 URL 参数读取标题
       const urlParams = new URLSearchParams(location.search);
       const titleParam = urlParams.get('title') || urlParams.get('name');
       if (titleParam) {
         return decodeURIComponent(titleParam).trim();
       }
 
-      // 4. 最后使用页面标题
+      // 4. 最后回退到原始页面标题
       return pageTitle || '未知种子';
     } catch (error) {
       console.error('提取页面标题失败:', error);
@@ -195,44 +191,140 @@
     const style = document.createElement('style');
     style.id = id;
     style.textContent = `
-.${CLS.BTN} { position: fixed !important; top: 40%; right: 12px; width: 48px !important; height: 48px !important; padding: 0 !important; background: linear-gradient(180deg, rgba(59,130,246,.88), rgba(99,102,241,.88)) !important; color: #fff !important; border: 1px solid rgba(255,255,255,.15) !important; border-radius: 50% !important; cursor: pointer !important; z-index: 10000 !important; opacity: .65 !important; box-shadow: 0 8px 24px rgba(0,0,0,.28) !important; display:flex !important; align-items:center !important; justify-content:center !important; transition: top .12s ease, left .12s ease, right .12s ease, opacity .12s ease, border-radius .12s ease, background .12s ease !important; }
-.${CLS.BTN} img { width: 24px !important; height: 24px !important; display: block !important; filter: brightness(0) invert(1) drop-shadow(0 1px 1px rgba(0,0,0,.35)) !important; }
-.${CLS.BTN} svg { filter: drop-shadow(0 1px 1px rgba(0,0,0,.35)) !important; }
-.${CLS.BTN}:hover { opacity: 1 !important; background: linear-gradient(180deg, rgba(59,130,246,1), rgba(99,102,241,1)) !important; box-shadow: 0 10px 28px rgba(0,0,0,.30) !important; }
-.${CLS.DRAGGING} { transition: none !important; opacity: .65 !important; background: linear-gradient(180deg, rgba(59,130,246,.65), rgba(99,102,241,.65)) !important; }
-/* 拖动时即使鼠标在其上，也保持半透明 */
-.${CLS.DRAGGING}:hover { opacity: .65 !important; background: linear-gradient(180deg, rgba(59,130,246,.65), rgba(99,102,241,.65)) !important; }
-/* 吸附到右侧：内侧平直、外侧圆角 */
-.${CLS.EDGE_RIGHT} { border-radius: 24px 0 0 24px !important; }
-/* 吸附到左侧：内侧平直、外侧圆角 */
-.${CLS.EDGE_LEFT} { border-radius: 0 24px 24px 0 !important; }
-.${CLS.LOADING} { height: 14px !important; width: 14px !important; border-radius: 50% !important; border: 8px dotted #f3f3f3 !important; animation: mp-ext-pt-float-spin 2s linear infinite !important; display: none !important; }
-.${CLS.LOADING_ACTIVE} .${CLS.LOADING} { display: block !important; }
-.${CLS.LOADING_ACTIVE} img { display:none !important; }
-@keyframes mp-ext-pt-float-spin { 0% { transform: rotate(0deg);} 100% { transform: rotate(360deg);} }
-.${CLS.TIPS} { display:none !important; position:absolute !important; left: -135px !important; background: rgba(0,0,0,.9) !important; top:50% !important; transform: translateY(-50%) !important; padding:6px 10px !important; font-size:12px !important; border-radius:6px !important; opacity:.98 !important; color:#fff !important; white-space:nowrap !important; z-index:2147483646 !important; box-shadow:0 6px 16px rgba(0,0,0,.35) !important; border:1px solid rgba(255,255,255,.12) !important; backdrop-filter: blur(2px) !important; }
-.${CLS.TIPS}::after { content:''; position:absolute; right:-6px; top:50%; transform: translateY(-50%); width:0; height:0; border-top:6px solid transparent; border-bottom:6px solid transparent; border-left:6px solid rgba(0,0,0,.9); filter: drop-shadow(0 1px 1px rgba(0,0,0,.2)); }
-.${CLS.BTN}:hover .${CLS.TIPS} { display:block !important; }
-.${CLS.LOADING_ACTIVE} .${CLS.TIPS} { left: -151px !important; display:block !important; }
+.${CLS.BTN} {
+  position: fixed !important;
+  top: 40%;
+  right: 12px;
+  width: 46px !important;
+  height: 46px !important;
+  padding: 0 !important;
+  background: linear-gradient(180deg, rgba(139, 92, 246, 0.75) 0%, rgba(109, 40, 217, 0.85) 100%) !important;
+  backdrop-filter: blur(8px) !important;
+  -webkit-backdrop-filter: blur(8px) !important;
+  color: #fff !important;
+  border: none !important;
+  border-radius: 50% !important;
+  cursor: pointer !important;
+  z-index: 10000000 !important;
+  opacity: .75 !important;
+  box-shadow: 0 4px 12px rgba(109, 40, 217, 0.25) !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  transition: opacity .2s ease, border-radius .2s ease, background .2s ease, box-shadow .2s ease !important;
+}
+.${CLS.BTN} img {
+  width: 21px !important;
+  height: 21px !important;
+  display: block !important;
+  filter: brightness(0) invert(1) !important;
+}
+/* 初始坐标确定后再添加 ready 类，避免页面加载时从默认位置滑动到缓存位置 */
+.${CLS.BTN}.mp-ext-pt-float-ready {
+  transition: top .25s cubic-bezier(0.25, 0.8, 0.25, 1), left .25s cubic-bezier(0.25, 0.8, 0.25, 1), right .25s cubic-bezier(0.25, 0.8, 0.25, 1), opacity .2s ease, border-radius .2s ease, background .2s ease, box-shadow .2s ease !important;
+}
+.${CLS.BTN}:hover {
+  opacity: 1 !important;
+  background: linear-gradient(180deg, rgba(139, 92, 246, 0.9) 0%, rgba(109, 40, 217, 0.95) 100%) !important;
+  box-shadow: 0 6px 16px rgba(109, 40, 217, 0.35) !important;
+}
+.${CLS.DRAGGING} {
+  transition: none !important;
+  opacity: .8 !important;
+  background: linear-gradient(180deg, rgba(139, 92, 246, 0.65) 0%, rgba(109, 40, 217, 0.75) 100%) !important;
+}
+.${CLS.DRAGGING}:hover {
+  opacity: .8 !important;
+}
+.${CLS.EDGE_RIGHT} {
+  border-radius: 23px 0 0 23px !important;
+}
+.${CLS.EDGE_LEFT} {
+  border-radius: 0 23px 23px 0 !important;
+}
+.${CLS.LOADING} {
+  height: 18px !important;
+  width: 18px !important;
+  border-radius: 50% !important;
+  border: 2px solid rgba(255, 255, 255, 0.3) !important;
+  border-top: 2px solid #ffffff !important;
+  animation: mp-ext-pt-float-spin 0.8s linear infinite !important;
+  display: none !important;
+  box-sizing: border-box !important;
+}
+.${CLS.LOADING_ACTIVE} .${CLS.LOADING} {
+  display: block !important;
+}
+.${CLS.LOADING_ACTIVE} img {
+  display: none !important;
+}
+@keyframes mp-ext-pt-float-spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+.${CLS.TIPS} {
+  display: none !important;
+  position: absolute !important;
+  left: -142px !important;
+  top: 50% !important;
+  transform: translateY(-50%) !important;
+  padding: 6px 12px !important;
+  font-size: 12px !important;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif !important;
+  border-radius: 6px !important;
+  color: #fff !important;
+  background: rgba(15, 23, 42, 0.95) !important;
+  backdrop-filter: blur(4px) !important;
+  -webkit-backdrop-filter: blur(4px) !important;
+  border: 1px solid rgba(255, 255, 255, 0.1) !important;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15) !important;
+  white-space: nowrap !important;
+  z-index: 2147483646 !important;
+  pointer-events: none !important;
+}
+.${CLS.TIPS}::after {
+  content: '';
+  position: absolute;
+  right: -5px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 0;
+  height: 0;
+  border-top: 5px solid transparent;
+  border-bottom: 5px solid transparent;
+  border-left: 5px solid rgba(15, 23, 42, 0.95);
+}
+.${CLS.BTN}:hover .${CLS.TIPS} {
+  display: block !important;
+}
+.${CLS.LOADING_ACTIVE} .${CLS.TIPS} {
+  left: -158px !important;
+  display: block !important;
+}
+/* 按钮吸附左侧时，将提示气泡移到右侧并反转箭头 */
+.${CLS.EDGE_LEFT} .${CLS.TIPS} {
+  left: auto !important;
+  right: -142px !important;
+}
+.${CLS.EDGE_LEFT}.${CLS.LOADING_ACTIVE} .${CLS.TIPS} {
+  right: -158px !important;
+}
+.${CLS.EDGE_LEFT} .${CLS.TIPS}::after {
+  right: auto;
+  left: -5px;
+  border-left: none;
+  border-right: 5px solid rgba(15, 23, 42, 0.95);
+}
 `;
     document.head.appendChild(style);
-  }
-
-  function readPos() {
-    try {
-      const key = 'mp-pt-float-pos:' + location.hostname;
-      // 从 chrome.storage.local 读取（替代 localStorage，避免被页面 JS 读取/篡改）
-      // 注意：content script 中 chrome.storage.local 读取是异步的，但这里用同步缓存回退
-      return null; // 位置由 chrome.storage.local 异步读取（见 init 中的 applyStoredPos）
-    } catch { return null; }
   }
 
   function savePos(pos: { top: number; left?: number; right?: number }) {
     try {
       const key = 'mp-pt-float-pos:' + location.hostname;
-      // 存储到 chrome.storage.local（隔离于页面 JS）
+      // 写入扩展本地存储，避免暴露给页面脚本
       chrome.storage.local.set({ [key]: pos });
-    } catch {}
+    } catch { }
   }
 
   async function applyStoredPos(btn: HTMLElement) {
@@ -259,6 +351,16 @@
     } catch {
       btn.style.right = '0px';
       btn.classList.add(CLS.EDGE_RIGHT);
+    } finally {
+      // 坐标确定后再挂载到页面，避免短暂显示在默认位置
+      document.body.appendChild(btn);
+
+      // 挂载后一帧再启用过渡动画，确保后续吸附动画平滑
+      requestAnimationFrame(() => {
+        requestAnimationFrame(() => {
+          btn.classList.add('mp-ext-pt-float-ready');
+        });
+      });
     }
   }
 
@@ -269,11 +371,11 @@
     btn.className = CLS.BTN;
     btn.type = 'button';
 
-    // 使用扩展图标（纯图片方案）
+    // 使用扩展内置图标，避免依赖页面字体或外部资源
     const img = document.createElement('img');
     img.width = 24; img.height = 24; img.style.display = 'block';
     try { img.src = chrome.runtime.getURL('icons/icon.png'); } catch { img.src = ''; }
-    img.onload = () => { /* ok */ };
+    img.onload = () => { /* 图标加载成功，无需额外处理 */ };
     btn.appendChild(img);
 
     const loading = document.createElement('div');
@@ -286,18 +388,17 @@
     btn.appendChild(tips);
 
     let moved = false;
-    btn.addEventListener('mousemove', () => { /* no-op, reserved */ });
     btn.addEventListener('click', () => {
       if (dragging || moved) { moved = false; return; }
       btn.disabled = true;
       btn.classList.add(CLS.LOADING_ACTIVE);
       tips.textContent = '正在打开下载...';
-      
-      // 提取页面标题
+
+      // 获取当前页面标题，传给下载面板预填名称
       const pageTitle = extractPageTitle();
-      
-      chrome.runtime.sendMessage({ 
-        type: 'MP_PT_OPEN_DOWNLOAD', 
+
+      chrome.runtime.sendMessage({
+        type: 'MP_PT_OPEN_DOWNLOAD',
         url: location.href,
         title: pageTitle
       }, (resp: any) => {
@@ -305,17 +406,17 @@
         btn.classList.remove(CLS.LOADING_ACTIVE);
         tips.textContent = 'MoviePilot推送下载';
         if (!resp || resp.success === false) {
-          try { chrome.runtime.sendMessage({ type: 'MP_SHOW_NOTIFICATION', title: '打开失败', message: resp?.error || '无法打开下载面板', level: 'error' }); } catch {}
+          try { chrome.runtime.sendMessage({ type: 'MP_SHOW_NOTIFICATION', title: '打开失败', message: resp?.error || '无法打开下载面板', level: 'error' }); } catch { }
         }
       });
     });
 
-    // Apply persisted position (async from chrome.storage.local)
+    // 应用本域名下缓存的按钮位置
     applyStoredPos(btn);
 
-    // Drag to move & snap
+    // 支持拖动按钮，并在松手后吸附到最近的屏幕边缘
     let dragging = false;
-    let startX = 0, startY = 0, startTop = 0, startLeft = 0, useLeft = false;
+    let startX = 0, startY = 0, startTop = 0, startLeft = 0;
     btn.addEventListener('mousedown', (ev) => {
       dragging = true;
       moved = false;
@@ -324,8 +425,7 @@
       startX = ev.clientX; startY = ev.clientY;
       const rect = btn.getBoundingClientRect();
       startTop = rect.top; startLeft = rect.left;
-      // During drag, use left for positioning for smooth move
-      useLeft = true;
+      // 拖动过程中统一使用 left 定位，保证移动过程顺滑
       btn.style.left = rect.left + 'px';
       // top 使用 px，允许上下拖动
       btn.style.top = rect.top + 'px';
@@ -338,8 +438,8 @@
       const dy = ev.clientY - startY;
       if (!moved && (Math.abs(dx) > 3 || Math.abs(dy) > 3)) moved = true;
       const vw = window.innerWidth, vh = window.innerHeight;
-      const newLeft = clamp(startLeft + dx, 4, vw - 52);
-      const newTop = clamp(startTop + dy, 4, vh - 52);
+      const newLeft = clamp(startLeft + dx, 4, vw - 50);
+      const newTop = clamp(startTop + dy, 4, vh - 50);
       btn.style.left = newLeft + 'px';
       btn.style.top = newTop + 'px';
     });
@@ -351,17 +451,17 @@
       const vw = window.innerWidth;
       const centerX = rect.left + rect.width / 2;
       const snapRight = centerX > vw / 2;
-      // Snap to nearest side with 12px margin
+      // 根据按钮中心点判断吸附到左侧还是右侧
       btn.style.top = clamp(rect.top, 4, window.innerHeight - rect.height - 4) + 'px';
       if (snapRight) {
-        const right = 0; // fully stick to edge
+        const right = 0; // 紧贴右侧边缘
         btn.style.right = right + 'px';
         btn.style.left = 'auto';
         btn.classList.remove(CLS.EDGE_LEFT);
         btn.classList.add(CLS.EDGE_RIGHT);
         savePos({ top: parseFloat(btn.style.top), right });
       } else {
-        const left = 0; // fully stick to edge
+        const left = 0; // 紧贴左侧边缘
         btn.style.left = left + 'px';
         btn.style.right = 'auto';
         btn.classList.remove(CLS.EDGE_RIGHT);
@@ -369,8 +469,6 @@
         savePos({ top: parseFloat(btn.style.top), left });
       }
     });
-
-    document.body.appendChild(btn);
   }
 
   async function init() {
@@ -384,34 +482,49 @@
       console.log('MP Extension: 种子详情页一键下载已关闭');
       return;
     }
-    
-    // 先检查是否是种子详情页
+
+    // 仅在种子详情页注入按钮
     if (!isTorrentDetailPage()) {
       console.log('MP Extension: 不是种子详情页');
       return;
     }
-    
+
     console.log('MP Extension: 是种子详情页，开始检查站点支持状态');
-    
-    // 异步检查站点支持状态
+
+    // 确认当前域名已存在于 MoviePilot 站点配置中
     const supported = await isSupportedSite();
     console.log('MP Extension: 站点支持状态检查结果:', supported);
-    
+
     if (!supported) {
       console.log('MP Extension: 不支持的站点');
       return;
     }
-    
+
     console.log('MP Extension: 开始创建浮动按钮');
     injectStyle();
     createButton();
   }
 
-  if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', () => init());
-  } else {
-    init();
+  function tryInit() {
+    if (document.body) {
+      init();
+    } else {
+      const observer = new MutationObserver((_, obs) => {
+        if (document.body) {
+          obs.disconnect();
+          init();
+        }
+      });
+      observer.observe(document.documentElement, { childList: true, subtree: true });
+
+      document.addEventListener('DOMContentLoaded', () => {
+        observer.disconnect();
+        init();
+      });
+    }
   }
+
+  tryInit();
 })();
 
 

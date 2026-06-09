@@ -700,6 +700,10 @@
 </template>
 
 <script setup lang="ts">
+// ============================================================
+// 设置页面视图
+// 主题/背景/Cookie UA 自动更新/站点自动打开/PIN/功能开关
+// ============================================================
 import { computed, nextTick, onMounted, reactive, ref } from 'vue';
 import { ElMessage } from 'element-plus';
 import { mdiCookieRefreshOutline, mdiOpenInNew, mdiShieldLockOutline, mdiWebBox, mdiKeyOutline, mdiImageOutline } from '@mdi/js';

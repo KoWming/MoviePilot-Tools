@@ -1,4 +1,9 @@
-// TOTP相关类型定义
+// ============================================================
+// TOTP 两步验证相关类型定义
+// TOTPSite / TOTPCode / TOTPConfig / QRScanResult / TOTPExportData
+// ============================================================
+
+// TOTP 站点配置
 export interface TOTPSite {
   id: string;
   name: string;

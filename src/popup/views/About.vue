@@ -226,12 +226,17 @@
 </template>
 
 <script setup lang="ts">
+// ============================================================
+// 关于页面视图
+// 版本信息、项目链接
+// ============================================================
 import { ref, onMounted } from 'vue';
 import {
   mdiWeb, mdiChartLine, mdiDownload, mdiShieldKey,
   mdiAccount, mdiPuzzleOutline, mdiCogOutline, mdiInformationOutline
 } from '@mdi/js';
 
+// ==================== 扩展版本 ====================
 const extVersion = ref('');
 onMounted(() => {
   try {
@@ -240,6 +245,7 @@ onMounted(() => {
   } catch {}
 });
 
+// ==================== 功能导航列表 ====================
 const navItems = [
   { icon: mdiWeb,                label: '站点管理', desc: '查看与同步站点 Cookie/UA，批量覆盖与更新',         colorClass: 'ni-site' },
   { icon: mdiChartLine,          label: '站点数据', desc: '上传下载做种统计，导出与隐私模式',                 colorClass: 'ni-data' },

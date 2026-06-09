@@ -77,8 +77,63 @@
     </div>
 
     <!-- 站点列表 -->
-    <div class="grid" v-loading="loading">
-      <div v-if="filteredAndSorted.length === 0" class="empty-state">
+    <div class="grid">
+      <div v-if="loading" class="site-cards">
+        <div v-for="item in 3" :key="item" class="sites-loading-card">
+          <div class="card-header">
+            <div class="sites-loading-line sites-loading-time sites-loading-shimmer"></div>
+          </div>
+
+          <div class="status-indicators">
+            <div class="sites-loading-status-icon sites-loading-shimmer"></div>
+            <div class="sites-loading-label sites-loading-shimmer"></div>
+            <div class="sites-loading-label short sites-loading-shimmer"></div>
+          </div>
+
+          <div class="site-info">
+            <div class="sites-loading-logo sites-loading-shimmer"></div>
+            <div class="site-details">
+              <div class="sites-loading-line sites-loading-name sites-loading-shimmer"></div>
+              <div class="user-info">
+                <div class="sites-loading-pill sites-loading-shimmer"></div>
+                <div class="sites-loading-line sites-loading-user sites-loading-shimmer"></div>
+              </div>
+            </div>
+          </div>
+
+          <div class="metrics-grid">
+            <div v-for="metric in 4" :key="metric" class="metric-item">
+              <div class="sites-loading-line sites-loading-metric-label sites-loading-shimmer"></div>
+              <div class="sites-loading-line sites-loading-metric-value sites-loading-shimmer"></div>
+            </div>
+          </div>
+
+          <div class="data-transfer">
+            <div class="transfer-column upload">
+              <div class="sites-loading-transfer-icon sites-loading-shimmer"></div>
+              <div class="transfer-data">
+                <div class="sites-loading-line sites-loading-transfer-line sites-loading-shimmer"></div>
+                <div class="sites-loading-line sites-loading-transfer-line short sites-loading-shimmer"></div>
+              </div>
+            </div>
+            <div class="transfer-divider"></div>
+            <div class="transfer-column download">
+              <div class="sites-loading-transfer-icon sites-loading-shimmer"></div>
+              <div class="transfer-data">
+                <div class="sites-loading-line sites-loading-transfer-line sites-loading-shimmer"></div>
+                <div class="sites-loading-line sites-loading-transfer-line short sites-loading-shimmer"></div>
+              </div>
+            </div>
+          </div>
+
+          <div class="card-actions">
+            <div class="sites-loading-button sites-loading-shimmer"></div>
+            <div class="sites-loading-button secondary sites-loading-shimmer"></div>
+          </div>
+        </div>
+      </div>
+
+      <div v-else-if="filteredAndSorted.length === 0" class="empty-state">
         <svg viewBox="0 0 24 24" width="48" height="48" class="empty-icon"><path :d="mdiDatabaseOutline"/></svg>
         <p class="empty-text">暂无站点数据</p>
       </div>
@@ -233,6 +288,10 @@
 </template>
 
 <script setup lang="ts">
+// ============================================================
+// 站点数据仪表板视图
+// 展示所有 PT 站点列表及状态（Cookie 状态、连接状态等）
+// ============================================================
 import { onMounted, ref, computed, watch } from 'vue';
 import { mdiUpload, mdiDownload, mdiSeed, mdiDatabaseOutline, mdiMagnify, mdiRefresh, mdiExportVariant, mdiSync, mdiShieldOutline, mdiNetworkOutline, mdiAppleSafari, mdiSpeedometer } from '@mdi/js';
 import { createMpApiClient } from '../../shared/api/client';
@@ -972,9 +1031,9 @@ onMounted(async () => {
 </script>
 
 <style scoped>
-.sites-root { width: 100%; padding: 8px; box-sizing: border-box; }
-.overview { display:grid; grid-template-columns: repeat(2,1fr); gap:6px; margin-bottom:6px; }
-.ov-card { display:flex; align-items:center; gap:8px; border:1px solid rgba(0,0,0,.06); background:#fff; border-radius:10px; padding:10px; box-shadow:0 2px 8px rgba(0,0,0,.04); }
+.sites-root { width: 100%; max-width: 100%; min-width: 0; padding: 8px; box-sizing: border-box; overflow-x: hidden; }
+.overview { width: 100%; min-width: 0; display:grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap:6px; margin-bottom:6px; }
+.ov-card { min-width: 0; box-sizing: border-box; display:flex; align-items:center; gap:8px; border:1px solid rgba(0,0,0,.06); background:#fff; border-radius:10px; padding:10px; box-shadow:0 2px 8px rgba(0,0,0,.04); }
 .icon-wrap { width:32px; height:32px; border-radius:8px; display:inline-flex; align-items:center; justify-content:center; }
 .icon-wrap svg { width:18px; height:18px; fill: currentColor; color:#fff; }
 .icon-wrap.green { background:#22c55e; }
@@ -983,12 +1042,13 @@ onMounted(async () => {
 .icon-wrap.red { background:#ef4444; }
 .ov-card .text .num { font-size:14px; font-weight:700; line-height:14px; }
 .ov-card .text .label { font-size:12px; color:#8c8c8c; }
-.toolbar { display:flex; flex-direction: column; gap:6px; margin-bottom:6px; }
-.toolbar-row.inputs { display:grid; grid-template-columns: 1fr 1fr; gap:6px; }
-.toolbar-row.inputs .full { width: 100%; }
-.toolbar-row.actions { display:grid; grid-template-columns: auto auto auto 1fr; gap:2px; }
+.toolbar { width: 100%; max-width: 100%; min-width: 0; overflow: hidden; display:flex; flex-direction: column; gap:6px; margin-bottom:6px; }
+.toolbar-row.inputs { min-width: 0; display:grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap:6px; }
+.toolbar-row.inputs .full { width: 100%; min-width: 0; }
+.toolbar-row.actions { min-width: 0; display:grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap:2px; }
 .toolbar-row.actions .compact :deep(.el-button__text){ white-space: nowrap; }
 .toolbar-row.actions .compact { 
+  min-width: 0;
   padding: 0 6px; 
 }
 
@@ -1025,12 +1085,22 @@ onMounted(async () => {
 }
 /* 站点卡片网格 */
 .grid { 
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+  overflow: hidden;
   display: grid; 
-  grid-template-columns: 1fr; 
+  grid-template-columns: minmax(0, 1fr); 
   gap: 12px; 
 }
 
 .site-cards {
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+  overflow: hidden;
   display: flex;
   flex-direction: column;
   gap: 5px;
@@ -1051,6 +1121,217 @@ onMounted(async () => {
   box-shadow: 0 4px 16px rgba(0, 0, 0, 0.15);
   transform: translateY(-2px);
   z-index: 10;
+}
+
+.sites-loading-card {
+  width: auto;
+  max-width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+  background: #ffffff;
+  border-radius: 12px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  padding: 16px;
+  border: 1px solid rgba(0, 0, 0, 0.06);
+  position: relative;
+  pointer-events: none;
+  overflow: hidden;
+}
+
+.sites-loading-card .card-header {
+  padding-right: 100px;
+  min-width: 0;
+}
+
+.sites-loading-card .status-indicators {
+  right: 8px;
+  max-width: 94px;
+  overflow: hidden;
+}
+
+.sites-loading-card .site-info,
+.sites-loading-card .site-details,
+.sites-loading-card .user-info,
+.sites-loading-card .metrics-grid,
+.sites-loading-card .metric-item,
+.sites-loading-card .data-transfer,
+.sites-loading-card .transfer-column,
+.sites-loading-card .transfer-data,
+.sites-loading-card .card-actions {
+  min-width: 0;
+  max-width: 100%;
+  box-sizing: border-box;
+}
+
+.sites-loading-shimmer {
+  background: linear-gradient(90deg, #edf2f7 25%, #f8fafc 37%, #edf2f7 63%);
+  background-size: 400% 100%;
+  animation: sites-loading-shimmer 1.25s ease-in-out infinite;
+}
+
+.sites-loading-line {
+  max-width: 100%;
+  min-width: 0;
+  height: 10px;
+  border-radius: 999px;
+}
+
+.sites-loading-time {
+  width: 42%;
+}
+
+.sites-loading-status-icon {
+  width: 20px;
+  min-width: 20px;
+  height: 20px;
+  border-radius: 4px;
+}
+
+.sites-loading-label {
+  width: 36px;
+  max-width: 36px;
+  height: 18px;
+  border-radius: 4px;
+}
+
+.sites-loading-label.short {
+  width: 30px;
+  max-width: 30px;
+}
+
+.sites-loading-logo {
+  width: 40px;
+  height: 40px;
+  border-radius: 8px;
+  flex-shrink: 0;
+}
+
+.sites-loading-name {
+  width: 52%;
+  height: 16px;
+  margin-bottom: 8px;
+}
+
+.sites-loading-pill {
+  width: 46px;
+  max-width: 46px;
+  height: 18px;
+  border-radius: 4px;
+}
+
+.sites-loading-user {
+  width: 58px;
+  max-width: calc(100% - 54px);
+}
+
+.sites-loading-metric-label {
+  width: 44px;
+  margin: 0 auto 6px;
+}
+
+.sites-loading-metric-value {
+  width: 42px;
+  height: 12px;
+  margin: 0 auto;
+}
+
+.sites-loading-transfer-icon {
+  width: 20px;
+  height: 20px;
+  border-radius: 4px;
+  flex-shrink: 0;
+}
+
+.sites-loading-transfer-line {
+  width: 76%;
+  max-width: 100%;
+  margin-bottom: 7px;
+}
+
+.sites-loading-transfer-line.short {
+  width: 68%;
+  margin-bottom: 0;
+}
+
+.sites-loading-button {
+  flex: 1;
+  min-width: 0;
+  height: 28px;
+  border-radius: 6px;
+}
+
+.sites-loading-button.secondary {
+  opacity: 0.78;
+}
+
+@media (max-width: 480px) {
+  .sites-root {
+    padding-left: 6px;
+    padding-right: 6px;
+  }
+
+  .sites-loading-card {
+    padding: 12px;
+  }
+
+  .sites-loading-card .card-header {
+    padding-right: 88px;
+  }
+
+  .sites-loading-card .status-indicators {
+    max-width: 82px;
+  }
+
+  .sites-loading-status-icon {
+    width: 18px;
+    min-width: 18px;
+    height: 18px;
+  }
+
+  .sites-loading-label {
+    width: 30px;
+    max-width: 30px;
+  }
+
+  .sites-loading-label.short {
+    width: 24px;
+    max-width: 24px;
+  }
+
+  .sites-loading-logo {
+    width: 36px;
+    height: 36px;
+  }
+
+  .sites-loading-pill {
+    width: 38px;
+    max-width: 38px;
+  }
+
+  .sites-loading-user {
+    width: 44px;
+  }
+
+  .sites-loading-metric-label {
+    width: 34px;
+  }
+
+  .sites-loading-metric-value {
+    width: 34px;
+  }
+
+  .data-transfer {
+    padding: 10px 8px;
+  }
+
+  .transfer-divider {
+    margin: 0 8px;
+  }
+}
+
+@keyframes sites-loading-shimmer {
+  0% { background-position: 100% 0; }
+  100% { background-position: 0 0; }
 }
 
 /* 顶部状态栏 */

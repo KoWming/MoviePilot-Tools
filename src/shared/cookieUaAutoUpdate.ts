@@ -1,13 +1,21 @@
+// ============================================================
+// Cookie/UA 自动更新配置模块
+// 定时通过浏览器获取最新 Cookie/UserAgent 并同步到 MP 站点
+// ============================================================
+
 import { STORAGE_KEYS } from './constants';
 
+// Cookie/UA 自动更新配置接口
 export interface CookieUaAutoUpdateConfig {
-  dailyFirstEnabled: boolean;
-  intervalEnabled: boolean;
-  intervalMinutes: number;
+  dailyFirstEnabled: boolean;     // 每日首次启用
+  intervalEnabled: boolean;       // 定时启用
+  intervalMinutes: number;        // 定时间隔（分钟）
 }
 
+// Chrome Alarm 名称
 export const COOKIE_UA_AUTO_UPDATE_ALARM = 'mp-cookie-ua-auto-update';
 
+// 定时间隔预设值
 export const COOKIE_UA_INTERVAL_PRESETS = [
   { label: '30 分钟', value: 30 },
   { label: '1 小时', value: 60 },

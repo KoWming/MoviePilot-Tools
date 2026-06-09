@@ -1,3 +1,8 @@
+// ============================================================
+// PT 凭据存储服务
+// 加密存储 PT 站点凭据（用户名/密码），支持 CRUD 和自动填充配置
+// ============================================================
+
 import { STORAGE_KEYS } from '../constants';
 import { encryptObject, decryptObject, type EncryptedPayload } from '../secureStorage';
 

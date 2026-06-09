@@ -1,8 +1,3 @@
-// 动态导入 content 脚本的构建产物（由构建流程复制到 assets 下）
-chrome.runtime.onInstalled.addListener(() => {
-  // noop
-});
-
 import { createMpApiClient } from '../shared/api/client';
 import { STORAGE_KEYS } from '../shared/constants';
 import {
@@ -231,6 +226,34 @@ async function getBrowserCookies(url: string): Promise<string> {
   }
 }
 
+// 规范化 Cookie 字符串为 Map（忽略顺序/空格/换行差异）
+function normalizeCookies(cookieStr: string): Map<string, string> {
+  const map = new Map<string, string>();
+  if (!cookieStr) return map;
+  const parts = cookieStr.split(/[;\n]/);
+  for (const part of parts) {
+    const trimmed = part.trim();
+    if (!trimmed) continue;
+    const idx = trimmed.indexOf('=');
+    if (idx <= 0) continue;
+    const name = trimmed.slice(0, idx).trim();
+    const value = trimmed.slice(idx + 1).trim();
+    if (name) map.set(name, value);
+  }
+  return map;
+}
+
+// 比较两组 Cookie 字符串是否内容一致（忽略顺序/格式差异）
+function isSameCookie(a: string, b: string): boolean {
+  const mapA = normalizeCookies(a);
+  const mapB = normalizeCookies(b);
+  if (mapA.size !== mapB.size) return false;
+  for (const [name, value] of mapA) {
+    if (!mapB.has(name) || mapB.get(name) !== value) return false;
+  }
+  return true;
+}
+
 async function isSiteAutoUpdateDisabled(site: Site): Promise<boolean> {
   try {
     const domain = new URL(site.url).hostname;
@@ -279,7 +302,7 @@ async function autoUpdateCookieAndUserAgent(reason: 'daily' | 'interval'): Promi
         continue;
       }
 
-      if ((site.cookie || '') === browserCookies && (site.ua || '') === browserUA) {
+      if (isSameCookie((site.cookie || ''), browserCookies) && (site.ua || '') === browserUA) {
         skipped++;
         continue;
       }

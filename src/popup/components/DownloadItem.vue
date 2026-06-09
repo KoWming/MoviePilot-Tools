@@ -72,6 +72,10 @@
 </template>
 
 <script setup lang="ts">
+// ============================================================
+// 下载项组件
+// 单个下载任务：进度条、状态图标、操作（暂停/恢复/删除）
+// ============================================================
 import { ref, computed, watch } from 'vue';
 import { 
   VideoPlay, 
@@ -81,6 +85,7 @@ import {
 import { downloadApi, type DownloadingInfo } from '../../shared/api/download';
 import { ElMessage, ElMessageBox } from 'element-plus';
 
+// ==================== Props / Emits ====================
 const props = defineProps<{
   download: DownloadingInfo;
   downloaderName: string;
@@ -91,6 +96,7 @@ const emit = defineEmits<{
   'state-changed': [payload: { hash: string; state: string }];
 }>();
 
+// ==================== 响应式状态 ====================
 const actionLoading = ref(false);
 // 乐观本地状态，避免暂停/开始后等待刷新导致的 UI 不同步
 const localState = ref<string | null>(null);
@@ -102,22 +108,20 @@ watch(() => props.download.state, (newVal) => {
     localState.value = null;
   }
 });
-// 计算季标签
+// ==================== 计算属性 ====================
+// 季标签（优先使用结构化数据，其次从文本抽取）
 const seasonLabel = computed(() => {
-  // 优先使用结构化的 season/episode
   if (props.download.media?.season) {
-    const s = props.download.media.season;
-    return s.toString();
+    return props.download.media.season.toString();
   }
-  // 其次尝试从 season_episode 文本中抽取季信息（如 S01E02 / S01）
   const text = props.download.season_episode || '';
   const match = text.match(/S\d{1,2}/i);
   return match ? match[0].toUpperCase() : '';
 });
-
 // 是否正在下载
 const isDownloading = computed(() => currentState.value === 'downloading');
 
+// ==================== 工具函数 ====================
 // 格式化文件大小
 function formatFileSize(bytes: number): string {
   if (bytes === 0) return '0 B';
@@ -146,40 +150,42 @@ function formatProgress(progress: number): string {
   return Math.round(progress).toString();
 }
 
-// 进度条颜色（去掉状态图标，使用颜色表达状态）
+// ==================== 状态映射 ====================
+// 进度条颜色
+const PROGRESS_COLORS: Record<string, string> = {
+  downloading: '#67C23A',
+  paused: '#E6A23C',
+  error: '#F56C6C',
+  completed: '#909399',
+};
 function getProgressColor() {
-  switch (currentState.value) {
-    case 'downloading': return '#67C23A'; // success
-    case 'paused': return '#E6A23C'; // warning
-    case 'error': return '#F56C6C'; // danger
-    case 'completed': return '#909399'; // info/finished
-    default: return '#67C23A';
-  }
+  return PROGRESS_COLORS[currentState.value] || '#67C23A';
 }
 
-// 获取状态类型
+// 状态标签类型
+const STATUS_TYPES: Record<string, string> = {
+  downloading: 'success',
+  paused: 'warning',
+  error: 'danger',
+  completed: 'info',
+};
 function getStatusType() {
-  switch (currentState.value) {
-    case 'downloading': return 'success';
-    case 'paused': return 'warning';
-    case 'error': return 'danger';
-    case 'completed': return 'info';
-    default: return 'info';
-  }
+  return STATUS_TYPES[currentState.value] || 'info';
 }
 
-// 获取状态文本
+// 状态文本
+const STATUS_TEXTS: Record<string, string> = {
+  downloading: '下载中',
+  paused: '已暂停',
+  error: '错误',
+  completed: '已完成',
+};
 function getStatusText() {
-  switch (currentState.value) {
-    case 'downloading': return '下载中';
-    case 'paused': return '已暂停';
-    case 'error': return '错误';
-    case 'completed': return '已完成';
-    default: return '未知';
-  }
+  return STATUS_TEXTS[currentState.value] || '未知';
 }
 
-// 切换下载状态
+// ==================== 下载操作 ====================
+// 切换下载状态（暂停/继续）
 async function toggleDownload() {
   actionLoading.value = true;
   const wasDownloading = currentState.value === 'downloading';
@@ -237,10 +243,9 @@ async function deleteDownload() {
   }
 }
 
-// 图片加载错误处理
+// 图片加载失败时隐藏
 function onImageError(event: Event) {
-  const img = event.target as HTMLImageElement;
-  img.style.display = 'none';
+  (event.target as HTMLImageElement).style.display = 'none';
 }
 </script>
 
@@ -306,12 +311,6 @@ function onImageError(event: Event) {
   line-height: 1;
 }
 
-.episode {
-  font-size: 12px;
-  color: #666;
-  margin-bottom: 4px;
-}
-
 .torrent-title {
   font-size: 12px;
   color: #999;
@@ -350,11 +349,6 @@ function onImageError(event: Event) {
   color: #666;
 }
 
-.speed-inline {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-}
 
 .speed-info {
   display: flex;

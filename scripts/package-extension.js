@@ -1,8 +1,15 @@
+// ============================================================
+// Chrome 扩展打包脚本
+// 生成 .crx 安装包和 .zip 压缩包，自动同步版本号
+// ============================================================
+
 import { execFileSync } from 'node:child_process';
 import { createWriteStream, existsSync, mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import archiver from 'archiver';
+
+// ===== 路径配置 =====
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const projectRoot = path.resolve(__dirname, '..');
@@ -12,6 +19,8 @@ const crxKeyPath = path.join(releaseDir, 'moviepilot-tools.pem');
 const manifestPath = existsSync(path.join(distDir, 'manifest.json'))
   ? path.join(distDir, 'manifest.json')
   : path.join(projectRoot, 'public', 'manifest.json');
+
+// ===== 工具函数 =====
 
 function readManifest() {
   return JSON.parse(readFileSync(manifestPath, 'utf8'));

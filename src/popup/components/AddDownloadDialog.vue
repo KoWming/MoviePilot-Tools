@@ -67,13 +67,19 @@
 </template>
 
 <script setup lang="ts">
+// ============================================================
+// 添加下载对话框组件
+// Torrent URL 输入、下载器选择、保存路径配置
+// ============================================================
 import { ref, watch, computed, onMounted } from 'vue';
 import type { DownloaderConf, DirectoryInfo, SiteInfo } from '../../shared/api/download';
 import { downloadApi } from '../../shared/api/download';
 import { ElMessage, ElMessageBox } from 'element-plus';
 
+// ==================== 类型定义 ====================
 export type DownloadType = 'torrent' | 'magnet' | 'site';
 
+// ==================== Props / Emits ====================
 const props = defineProps<{
   modelValue: boolean;
   downloaders: DownloaderConf[];
@@ -87,6 +93,7 @@ const emit = defineEmits<{
   (e: 'submitted'): void;
 }>();
 
+// ==================== 弹窗可见性控制 ====================
 const visibleInner = ref(false);
 watch(
   () => props.modelValue,
@@ -94,6 +101,7 @@ watch(
 );
 watch(visibleInner, v => emit('update:modelValue', v));
 
+// 预填充文本监听（弹窗打开时填入）
 const inputValue = ref('');
 watch(
   () => props.prefillText,
@@ -103,6 +111,7 @@ watch(
     }
   }
 );
+// ==================== 响应式状态 ====================
 const downloader = ref('');
 const savePath = ref('');
 const downloadLabel = ref('MOVIEPILOT'); // 默认使用系统标签
@@ -119,9 +128,10 @@ watch(
   { immediate: true }
 );
 
+// ==================== 计算属性 ====================
 const downloaders = computed(() => props.downloaders || []);
 
-// 根据类型计算对话框标题
+// 对话框标题
 const dialogTitle = computed(() => {
   switch (props.type) {
     case 'torrent':
@@ -135,7 +145,7 @@ const dialogTitle = computed(() => {
   }
 });
 
-// 根据类型计算输入框标签
+// 输入框标签
 const inputLabel = computed(() => {
   switch (props.type) {
     case 'torrent':
@@ -149,11 +159,11 @@ const inputLabel = computed(() => {
   }
 });
 
+// 输入框类型（站点为单行文本，其他为多行文本域）
 const inputType = computed(() => props.type === 'site' ? 'text' : 'textarea');
-
 const inputRows = computed(() => props.type === 'site' ? undefined : 4);
 
-// 根据类型计算输入框占位符
+// 输入框占位符
 const inputPlaceholder = computed(() => {
   switch (props.type) {
     case 'torrent':
@@ -167,7 +177,7 @@ const inputPlaceholder = computed(() => {
   }
 });
 
-// 根据类型计算提交按钮文字
+// 提交按钮文字
 const submitButtonText = computed(() => {
   switch (props.type) {
     case 'site':
@@ -177,7 +187,8 @@ const submitButtonText = computed(() => {
   }
 });
 
-// 根据类型计算验证错误信息
+// ==================== 标题/链接提取工具 ====================
+// 验证错误信息
 const getValidationError = () => {
   switch (props.type) {
     case 'torrent':
@@ -191,7 +202,7 @@ const getValidationError = () => {
   }
 };
 
-// 从 URL 提取更可识别的标题（提高后端识别成功率）
+// 从 URL 提取可识别的标题（提高后端识别成功率）
 function extractTitleFromUrl(url: string): string {
   try {
     if (url.startsWith('magnet:?')) {
@@ -212,7 +223,7 @@ function extractTitleFromUrl(url: string): string {
   }
 }
 
-// 为PT站种子生成更好的标题
+// 为 PT 站种子生成标题
 function generateTorrentTitle(url: string, siteName: string, id?: string): string {
   try {
     const urlObj = new URL(url);
@@ -243,7 +254,7 @@ function generateTorrentTitle(url: string, siteName: string, id?: string): strin
   }
 }
 
-// 获取从页面提取的标题
+// 从浏览器存储获取页面提取的标题
 async function getPageTitle(): Promise<string> {
   try {
     const data = await chrome.storage.local.get(['mp.pt_download_title']);
@@ -259,7 +270,8 @@ async function getPageTitle(): Promise<string> {
   }
 }
 
-// 根据URL匹配站点配置
+// ==================== 站点匹配 ====================
+// 根据 URL 匹配已配置的站点
 const findSiteByUrl = (url: string): SiteInfo | null => {
   try {
     const urlObj = new URL(url);
@@ -282,6 +294,229 @@ const findSiteByUrl = (url: string): SiteInfo | null => {
   }
 };
 
+// ==================== 下载提交 ====================
+// 直连下载上下文类型
+type DirectDownloadContext = {
+  enclosure?: string;
+  pageUrl: string;
+  siteDomain: string;
+  siteCookie?: string;
+  siteUa: string;
+  downloader: string;
+  savePath?: string;
+  title: string;
+  label: string;
+};
+
+// 重置弹窗表单状态
+function resetDialog() {
+  inputValue.value = '';
+  downloadLabel.value = 'MOVIEPILOT';
+  skipMediaRecognition.value = false;
+}
+
+// 构建站点种子下载参数（匹配到种子时使用）
+function buildSiteTorrentIn(site: SiteInfo, torrent: any) {
+  return {
+    ...torrent,
+    site: site.id,
+    site_name: site.name,
+    site_cookie: site.cookie,
+    site_ua: site.ua || '',
+    site_proxy: site.proxy === 1,
+    site_order: site.pri,
+    site_downloader: site.downloader || downloader.value,
+  };
+}
+
+// 构建站点种子下载参数（未匹配种子时，使用完整字段）
+function buildSiteTorrentInFull(site: SiteInfo, title: string, url: string) {
+  return {
+    site: site.id,
+    site_name: site.name,
+    site_cookie: site.cookie,
+    site_ua: site.ua || '',
+    site_proxy: site.proxy === 1,
+    site_order: site.pri,
+    site_downloader: site.downloader || downloader.value,
+    title,
+    description: `从 ${site.name} 获取的种子`,
+    enclosure: url,
+    page_url: url,
+    size: 0,
+    seeders: 0,
+    peers: 0,
+    grabs: 0,
+    pubdate: '',
+    date_elapsed: '',
+    freedate: '',
+    uploadvolumefactor: 0,
+    downloadvolumefactor: 0,
+    hit_and_run: false,
+    labels: [],
+    pri_order: 0,
+    volume_factor: '',
+    freedate_diff: ''
+  };
+}
+
+// 提交种子下载请求（失败时尝试直连下载）
+async function submitTorrent(
+  fn: () => Promise<{ success: boolean; message?: string; data?: any }>,
+  label: string,
+  directCtx?: DirectDownloadContext
+): Promise<boolean> {
+  const res = await fn();
+  if (!res?.success) {
+    const errMsg = res?.message || '未知错误';
+    ElMessage.error(`${label} 失败: ${errMsg}`);
+    if (directCtx) await tryDirectDownload(directCtx);
+    return false;
+  }
+  return true;
+}
+
+// 处理已匹配种子的下载
+async function handleMatchedTorrent(
+  site: SiteInfo,
+  torrent: any,
+  buildCtx: (title: string, enclosure?: string) => DirectDownloadContext
+): Promise<boolean> {
+  if (skipMediaRecognition.value) {
+    tryDirectDownload(buildCtx(torrent.title, torrent.enclosure), true);
+    return false;
+  }
+
+  const torrentIn = buildSiteTorrentIn(site, torrent);
+  const ctx = buildCtx(torrent.title, torrent.enclosure);
+
+  try {
+    const mediaContext = await downloadApi.recognizeMedia(torrent.title, torrent.description);
+    if (mediaContext.media_info) {
+      // 识别成功：使用带媒体信息的下载接口
+      return await submitTorrent(() => downloadApi.addDownloadWithMedia({
+        torrent_in: torrentIn,
+        media_in: mediaContext.media_info,
+        downloader: downloader.value,
+        save_path: savePath.value || undefined,
+        label: downloadLabel.value || undefined
+      }), '添加下载（含媒体信息）', ctx);
+    }
+  } catch (error) {
+    console.error('媒体识别失败:', error);
+  }
+
+  // 识别失败或无媒体信息：使用普通下载接口（后端会再次尝试识别）
+  return await submitTorrent(() => downloadApi.addDownload({
+    torrent_in: torrentIn,
+    downloader: downloader.value,
+    save_path: savePath.value || undefined,
+    label: downloadLabel.value || undefined
+  }), '添加下载', ctx);
+}
+
+// 处理未匹配种子的下载（资源列表中无匹配项时）
+async function handleUnmatchedTorrent(
+  site: SiteInfo,
+  url: string,
+  id: string | null,
+  buildCtx: (title: string, enclosure?: string) => DirectDownloadContext
+): Promise<boolean> {
+  // 生成标题：优先从浏览器存储获取，其次从 URL 提取，最后用站点名生成
+  let title = await getPageTitle();
+  if (!title || title === '未知种子') {
+    title = extractTitleFromUrl(url);
+  }
+  if (!title || title === '未知种子' || title === 'details') {
+    title = generateTorrentTitle(url, site.name, id || undefined);
+  }
+
+  if (skipMediaRecognition.value) {
+    tryDirectDownload(buildCtx(title), true);
+    return false;
+  }
+
+  return await submitTorrent(() => downloadApi.addDownload({
+    torrent_in: buildSiteTorrentInFull(site, title, url),
+    downloader: downloader.value,
+    save_path: savePath.value || undefined,
+    label: downloadLabel.value || undefined
+  }), '添加下载', buildCtx(title));
+}
+
+// 处理站点类型下载
+async function handleSiteDownload(): Promise<boolean> {
+  const url = inputValue.value.trim();
+  const matchedSite = findSiteByUrl(url);
+
+  if (!matchedSite) {
+    ElMessage.error('未找到匹配的站点配置，请确保该站点已在MP中配置');
+    return false;
+  }
+
+  const buildCtx = (title: string, enclosure?: string): DirectDownloadContext => ({
+    enclosure,
+    pageUrl: url,
+    siteDomain: new URL(matchedSite.url).hostname,
+    siteCookie: matchedSite.cookie,
+    siteUa: matchedSite.ua || navigator.userAgent,
+    downloader: downloader.value,
+    savePath: savePath.value || undefined,
+    title,
+    label: downloadLabel.value || 'MOVIEPILOT'
+  });
+
+  try {
+    const resources = await downloadApi.getSiteResources(matchedSite.id);
+    const id = new URLSearchParams(new URL(url).search).get('id');
+
+    // 通过 ID 或 URL 匹配种子
+    let matchedTorrent = id
+      ? resources.find(t => t.page_url?.includes(`id=${id}`) || t.enclosure?.includes(`id=${id}`))
+      : null;
+    if (!matchedTorrent) {
+      matchedTorrent = resources.find(t => t.page_url === url || t.enclosure === url);
+    }
+
+    if (matchedTorrent) {
+      return await handleMatchedTorrent(matchedSite, matchedTorrent, buildCtx);
+    } else {
+      return await handleUnmatchedTorrent(matchedSite, url, id, buildCtx);
+    }
+  } catch (error) {
+    console.error('获取站点资源失败:', error);
+    ElMessage.error('获取站点资源失败，请稍后重试');
+    return false;
+  }
+}
+
+// 处理种子/磁力链接批量下载
+async function handleBulkDownload(): Promise<boolean> {
+  const lines = inputValue.value
+    .split('\n')
+    .map(s => s.trim())
+    .filter(Boolean);
+
+  let allOk = true;
+  for (const url of lines) {
+    const title = extractTitleFromUrl(url);
+    const ok = await submitTorrent(() => downloadApi.addDownload({
+      torrent_in: {
+        title,
+        description: '',
+        enclosure: url,
+        page_url: props.type === 'torrent' ? url : ''
+      },
+      downloader: downloader.value,
+      save_path: savePath.value || undefined,
+      label: downloadLabel.value || undefined
+    }), `添加下载: ${title}`);
+    if (!ok) allOk = false;
+  }
+  return allOk;
+}
+
+// 提交下载（入口函数）
 async function onSubmit() {
   if (!inputValue.value.trim()) {
     ElMessage.error(getValidationError());
@@ -294,247 +529,22 @@ async function onSubmit() {
 
   submitting.value = true;
   try {
-    const submitTorrent = async (
-      fn: () => Promise<{ success: boolean; message?: string; data?: any }>,
-      label: string,
-      directCtx?: {
-        enclosure?: string;
-        pageUrl: string;
-        siteDomain: string;
-        siteCookie?: string;
-        siteUa: string;
-        downloader: string;
-        savePath?: string;
-        title: string;
-        label: string;
-      }
-    ): Promise<boolean> => {
-      const res = await fn();
-      if (!res?.success) {
-        const errMsg = res?.message || '未知错误';
-        ElMessage.error(`${label} 失败: ${errMsg}`);
-        if (directCtx) await tryDirectDownload(directCtx);
-        return false;
-      }
-      return true;
-    };
-
+    let ok = true;
     if (props.type === 'site') {
-      // 站点下载：单个URL，使用匹配的站点配置信息
-      const url = inputValue.value.trim();
-      const matchedSite = findSiteByUrl(url);
-      
-      if (!matchedSite) {
-        ElMessage.error('未找到匹配的站点配置，请确保该站点已在MP中配置');
-        return;
-      }
-
-      const buildCtx = (title: string, enclosure?: string) => ({
-        enclosure,
-        pageUrl: url,
-        siteDomain: new URL(matchedSite.url).hostname,
-        siteCookie: matchedSite.cookie,
-        siteUa: matchedSite.ua || navigator.userAgent,
-        downloader: downloader.value,
-        savePath: savePath.value || undefined,
-        title,
-        label: downloadLabel.value || 'MOVIEPILOT'
-      });
-      
-      // 先获取站点资源列表，查找匹配的种子
-      try {
-        const resources = await downloadApi.getSiteResources(matchedSite.id);
-        
-        // 从URL中提取可能的种子ID或标题
-        const urlObj = new URL(url);
-        const urlParams = new URLSearchParams(urlObj.search);
-        const id = urlParams.get('id');
-        
-        // 查找匹配的种子
-        let matchedTorrent = null;
-        if (id) {
-          // 尝试通过ID匹配
-          matchedTorrent = resources.find(torrent => 
-            torrent.page_url?.includes(`id=${id}`) || 
-            torrent.enclosure?.includes(`id=${id}`)
-          );
-        }
-        
-        // 如果没找到，尝试通过URL匹配
-        if (!matchedTorrent) {
-          matchedTorrent = resources.find(torrent => 
-            torrent.page_url === url || 
-            torrent.enclosure === url
-          );
-        }
-        
-        if (matchedTorrent) {
-          // 根据用户选择决定下载方式
-          if (skipMediaRecognition.value) {
-            // 直连下载器，跳过 MP 媒体识别
-            tryDirectDownload(buildCtx(matchedTorrent.title, matchedTorrent.enclosure), true);
-            submitting.value = false;
-            return;
-          } else {
-            // 先尝试识别媒体信息
-            try {
-              const mediaContext = await downloadApi.recognizeMedia(matchedTorrent.title, matchedTorrent.description);
-              
-              if (mediaContext.media_info) {
-                // 如果识别成功，使用带媒体信息的下载接口
-                const ok = await submitTorrent(() => downloadApi.addDownloadWithMedia({
-                  torrent_in: {
-                    ...matchedTorrent,
-                    site: matchedSite.id,
-                    site_name: matchedSite.name,
-                    site_cookie: matchedSite.cookie,
-                    site_ua: matchedSite.ua || '',
-                    site_proxy: matchedSite.proxy === 1,
-                    site_order: matchedSite.pri,
-                    site_downloader: matchedSite.downloader || downloader.value,
-                  },
-                  media_in: mediaContext.media_info,
-                  downloader: downloader.value,
-                  save_path: savePath.value || undefined,
-                  label: downloadLabel.value || undefined
-                }), '添加下载（含媒体信息）', buildCtx(matchedTorrent.title, matchedTorrent.enclosure));
-                if (!ok) { submitting.value = false; return; }
-              } else {
-                // 如果识别失败，使用普通下载接口（后端会再次尝试识别）
-                const ok = await submitTorrent(() => downloadApi.addDownload({
-                  torrent_in: {
-                    ...matchedTorrent,
-                    site: matchedSite.id,
-                    site_name: matchedSite.name,
-                    site_cookie: matchedSite.cookie,
-                    site_ua: matchedSite.ua || '',
-                    site_proxy: matchedSite.proxy === 1,
-                    site_order: matchedSite.pri,
-                    site_downloader: matchedSite.downloader || downloader.value,
-                  },
-                  downloader: downloader.value,
-                  save_path: savePath.value || undefined,
-                  label: downloadLabel.value || undefined
-                }), '添加下载', buildCtx(matchedTorrent.title, matchedTorrent.enclosure));
-                if (!ok) { submitting.value = false; return; }
-              }
-            } catch (error) {
-              console.error('媒体识别失败:', error);
-              // 媒体识别失败，使用普通下载接口（后端会再次尝试识别）
-              const ok = await submitTorrent(() => downloadApi.addDownload({
-                torrent_in: {
-                  ...matchedTorrent,
-                  site: matchedSite.id,
-                  site_name: matchedSite.name,
-                  site_cookie: matchedSite.cookie,
-                  site_ua: matchedSite.ua || '',
-                  site_proxy: matchedSite.proxy === 1,
-                  site_order: matchedSite.pri,
-                  site_downloader: matchedSite.downloader || downloader.value,
-                },
-                downloader: downloader.value,
-                save_path: savePath.value || undefined,
-                label: downloadLabel.value || undefined
-              }), '添加下载', buildCtx(matchedTorrent.title, matchedTorrent.enclosure));
-              if (!ok) { submitting.value = false; return; }
-            }
-          }
-        } else {
-          // 如果没找到匹配的种子，根据用户选择决定处理方式
-          if (skipMediaRecognition.value) {
-            // 直连下载器，跳过 MP 媒体识别
-            let title = await getPageTitle();
-            if (!title || title === '未知种子') {
-              title = generateTorrentTitle(url, matchedSite.name, id || undefined);
-            }
-            tryDirectDownload(buildCtx(title), true);
-            submitting.value = false;
-            return;
-          } else {
-            // 需要媒体识别时，先尝试后端识别，使用完整的种子信息
-            let title = await getPageTitle();
-            if (!title || title === '未知种子') {
-              title = extractTitleFromUrl(url);
-            }
-            if (!title || title === '未知种子' || title === 'details') {
-              title = generateTorrentTitle(url, matchedSite.name, id || undefined);
-            }
-
-            const ok = await submitTorrent(() => downloadApi.addDownload({
-              torrent_in: {
-                site: matchedSite.id,
-                site_name: matchedSite.name,
-                site_cookie: matchedSite.cookie,
-                site_ua: matchedSite.ua || '',
-                site_proxy: matchedSite.proxy === 1,
-                site_order: matchedSite.pri,
-                site_downloader: matchedSite.downloader || downloader.value,
-                title: title,
-                description: `从 ${matchedSite.name} 获取的种子`,
-                enclosure: url,
-                page_url: url,
-                size: 0,
-                seeders: 0,
-                peers: 0,
-                grabs: 0,
-                pubdate: '',
-                date_elapsed: '',
-                freedate: '',
-                uploadvolumefactor: 0,
-                downloadvolumefactor: 0,
-                hit_and_run: false,
-                labels: [],
-                pri_order: 0,
-                volume_factor: '',
-                freedate_diff: ''
-              },
-              downloader: downloader.value,
-              save_path: savePath.value || undefined,
-              label: downloadLabel.value || undefined
-            }), '添加下载', buildCtx(title));
-            if (!ok) { submitting.value = false; return; }
-          }
-        }
-      } catch (error) {
-        console.error('获取站点资源失败:', error);
-        ElMessage.error('获取站点资源失败，请稍后重试');
-        return;
-      }
+      ok = await handleSiteDownload();
     } else {
-      // 种子链接和磁力链接：支持多行
-      const lines = inputValue.value
-        .split('\n')
-        .map(s => s.trim())
-        .filter(Boolean);
-
-      let allOk = true;
-      for (const url of lines) {
-        const title = extractTitleFromUrl(url);
-        const ok = await submitTorrent(() => downloadApi.addDownload({
-          torrent_in: {
-            title: title,
-            description: '',
-            enclosure: url,
-            page_url: props.type === 'torrent' ? url : ''
-          },
-          downloader: downloader.value,
-          save_path: savePath.value || undefined,
-          label: downloadLabel.value || undefined
-        }), `添加下载: ${title}`);
-        if (!ok) allOk = false;
-      }
-      if (!allOk) {
+      ok = await handleBulkDownload();
+      if (!ok) {
         ElMessage.warning('部分下载任务提交失败，请检查标题是否可识别');
         return;
       }
     }
-    
+    if (!ok) return;
+
     ElMessage.success('已提交下载任务');
     emit('submitted');
     visibleInner.value = false;
-    inputValue.value = '';
-    downloadLabel.value = 'MOVIEPILOT'; // 重置为默认标签
-    skipMediaRecognition.value = false; // 重置跳过媒体识别选项
+    resetDialog();
   } catch (e) {
     console.error(e);
     ElMessage.error('提交失败');
@@ -543,6 +553,7 @@ async function onSubmit() {
   }
 }
 
+// ==================== 直连下载 ====================
 function onCancel() {
   visibleInner.value = false;
 }
@@ -590,9 +601,7 @@ async function tryDirectDownload(ctx: {
       ElMessage.success(resp.message || '种子已推送到下载器');
       emit('submitted');
       visibleInner.value = false;
-      inputValue.value = '';
-      downloadLabel.value = 'MOVIEPILOT';
-      skipMediaRecognition.value = false;
+      resetDialog();
     } else {
       ElMessage.error(resp?.error || '直连下载失败');
     }
@@ -601,6 +610,7 @@ async function tryDirectDownload(ctx: {
   }
 }
 
+// ==================== 数据加载 ====================
 // 加载目录列表和站点配置
 async function loadData() {
   try {
@@ -618,6 +628,7 @@ async function loadData() {
   }
 }
 
+// ==================== 生命周期 ====================
 onMounted(() => {
   loadData();
 });

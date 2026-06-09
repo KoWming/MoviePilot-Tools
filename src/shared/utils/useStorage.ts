@@ -1,3 +1,9 @@
+// ============================================================
+// 存储管理 Vue 组合式函数
+// 响应式管理 Chrome Storage 数据（Token/BaseURL）
+// 支持 sync → local 自动迁移
+// ============================================================
+
 import { ref, computed, readonly } from 'vue';
 import { STORAGE_KEYS } from '../constants';
 

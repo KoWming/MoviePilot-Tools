@@ -1,73 +1,130 @@
 <template>
-  <div class="user-root" v-loading="loading">
+  <div class="user-root">
     <div class="header"></div>
+
+    <template v-if="loading">
+      <div class="user-loading-card">
+        <div class="user-loading-profile">
+          <div class="user-loading-avatar user-loading-shimmer"></div>
+          <div class="user-loading-meta">
+            <div class="user-loading-line name user-loading-shimmer"></div>
+            <div class="user-loading-badges">
+              <div class="user-loading-badge user-loading-shimmer"></div>
+              <div class="user-loading-badge user-loading-shimmer"></div>
+            </div>
+          </div>
+          <div class="user-loading-button user-loading-shimmer"></div>
+        </div>
+        <div class="user-loading-divider"></div>
+        <div class="user-loading-email user-loading-shimmer"></div>
+        <div class="user-loading-sub-stats">
+          <div class="user-loading-sub-stat">
+            <div class="user-loading-icon user-loading-shimmer"></div>
+            <div class="user-loading-sub-text">
+              <div class="user-loading-line count user-loading-shimmer"></div>
+              <div class="user-loading-line label user-loading-shimmer"></div>
+            </div>
+          </div>
+          <div class="user-loading-sub-stat">
+            <div class="user-loading-icon user-loading-shimmer"></div>
+            <div class="user-loading-sub-text">
+              <div class="user-loading-line count user-loading-shimmer"></div>
+              <div class="user-loading-line label user-loading-shimmer"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="user-loading-info-card">
+        <div class="user-loading-stats-grid">
+          <div v-for="item in 4" :key="item" class="user-loading-stat">
+            <div class="user-loading-line stat-num user-loading-shimmer"></div>
+            <div class="user-loading-line stat-label user-loading-shimmer"></div>
+          </div>
+        </div>
+        <div class="user-loading-divider"></div>
+        <div class="user-loading-version-title user-loading-shimmer"></div>
+        <div class="user-loading-version-list">
+          <div v-for="item in 4" :key="item" class="user-loading-version-item">
+            <div class="user-loading-line version-label user-loading-shimmer"></div>
+            <div class="user-loading-line version-value user-loading-shimmer"></div>
+          </div>
+        </div>
+      </div>
+    </template>
     
-    <!-- 用户卡片 -->
-    <UserCard 
-      :user="mappedUser" 
-      :movie-count="movieCount" 
-      :tv-count="tvCount" 
-      @edit="onEditProfile" 
-      @logout="logout" 
-    />
+    <template v-else>
+      <!-- 用户卡片 -->
+      <UserCard 
+        :user="mappedUser" 
+        :movie-count="movieCount" 
+        :tv-count="tvCount" 
+        @edit="onEditProfile" 
+        @logout="logout" 
+      />
 
-    <!-- 综合信息卡片 -->
-    <div class="comprehensive-info">
-      <el-card class="comprehensive-card" shadow="hover">
-        
-        <!-- 统计信息 -->
-        <div class="stats-section">
-          <div class="stats-grid">
-            <div class="stat-item stat-supporting">
-              <div class="stat-num">{{ precomputedStats.supportingSites ?? '-' }}</div>
-              <div class="stat-label">已适配站点</div>
-            </div>
-            <div class="stat-item stat-config">
-              <div class="stat-num">{{ precomputedStats.configSites ?? '-' }}</div>
-              <div class="stat-label">已配置站点</div>
-            </div>
-            <div class="stat-item stat-cookie">
-              <div class="stat-num">{{ precomputedStats.cookieCount ?? '-' }}</div>
-              <div class="stat-label">Cookie数</div>
-            </div>
-            <div class="stat-item stat-pending">
-              <div class="stat-num">{{ precomputedStats.pending ?? '-' }}</div>
-              <div class="stat-label">待更新</div>
+      <!-- 综合信息卡片 -->
+      <div class="comprehensive-info">
+        <el-card class="comprehensive-card" shadow="hover">
+          
+          <!-- 统计信息 -->
+          <div class="stats-section">
+            <div class="stats-grid">
+              <div class="stat-item stat-supporting">
+                <div class="stat-num">{{ precomputedStats.supportingSites ?? '-' }}</div>
+                <div class="stat-label">已适配站点</div>
+              </div>
+              <div class="stat-item stat-config">
+                <div class="stat-num">{{ precomputedStats.configSites ?? '-' }}</div>
+                <div class="stat-label">已配置站点</div>
+              </div>
+              <div class="stat-item stat-cookie">
+                <div class="stat-num">{{ precomputedStats.cookieCount ?? '-' }}</div>
+                <div class="stat-label">Cookie数</div>
+              </div>
+              <div class="stat-item stat-pending">
+                <div class="stat-num">{{ precomputedStats.pending ?? '-' }}</div>
+                <div class="stat-label">待更新</div>
+              </div>
             </div>
           </div>
-        </div>
 
-        <!-- 分隔线 -->
-        <div class="divider"></div>
+          <!-- 分隔线 -->
+          <div class="divider"></div>
 
-        <!-- 版本信息 -->
-        <div class="version-section">
-          <div class="version-title">MoviePilot 版本信息</div>
-          <div class="version-list">
-            <div class="version-item">
-              <span class="version-label">软件版本：</span>
-              <span class="version-value">{{ precomputedStats.systemVersion || '-' }}</span>
-            </div>
-            <div class="version-item">
-              <span class="version-label">前端版本：</span>
-              <span class="version-value">{{ precomputedStats.frontendVersion || '-' }}</span>
-            </div>
-            <div class="version-item">
-              <span class="version-label">认证资源版本：</span>
-              <span class="version-value">{{ precomputedStats.authVersion || '-' }}</span>
-            </div>
-            <div class="version-item">
-              <span class="version-label">站点资源版本：</span>
-              <span class="version-value">{{ precomputedStats.indexerVersion || '-' }}</span>
+          <!-- 版本信息 -->
+          <div class="version-section">
+            <div class="version-title">MoviePilot 版本信息</div>
+            <div class="version-list">
+              <div class="version-item">
+                <span class="version-label">软件版本：</span>
+                <span class="version-value">{{ precomputedStats.systemVersion || '-' }}</span>
+              </div>
+              <div class="version-item">
+                <span class="version-label">前端版本：</span>
+                <span class="version-value">{{ precomputedStats.frontendVersion || '-' }}</span>
+              </div>
+              <div class="version-item">
+                <span class="version-label">认证资源版本：</span>
+                <span class="version-value">{{ precomputedStats.authVersion || '-' }}</span>
+              </div>
+              <div class="version-item">
+                <span class="version-label">站点资源版本：</span>
+                <span class="version-value">{{ precomputedStats.indexerVersion || '-' }}</span>
+              </div>
             </div>
           </div>
-        </div>
-      </el-card>
-    </div>
+        </el-card>
+      </div>
+    </template>
   </div>
 </template>
 
 <script setup lang="ts">
+// ============================================================
+// 用户仪表板视图
+// 统计概览：下载/上传/分享率、快捷入口
+// ============================================================
 import { onMounted, reactive, computed, ref } from 'vue';
 import { createMpApiClient } from '../../shared/api/client';
 import UserCard from '../components/UserCard.vue';
@@ -79,7 +136,7 @@ import { STORAGE_KEYS } from '../../shared/constants';
 const user = reactive<{ user_name?: string; name?: string; avatar?: string; super_user?: boolean; email?: string }>({});
 const movieCount = ref(0);
 const tvCount = ref(0);
-const loading = ref(false);
+const loading = ref(true);
 
 // 预计算的统计数据 - 参考站点数据页面的优化方法
 const precomputedStats = ref({
@@ -176,9 +233,8 @@ async function fetchSiteStats() {
     } catch (e) {
       console.warn('获取已适配站点数失败:', e);
     }
-    const configSites = sitesList.filter((site: any) => 
-      site.cookie || site.apikey || site.token
-    ).length;
+    // 已配置站点：统计 MP 服务端真实站点（与站点管理页一致，按 id 判定）
+    const configSites = sitesList.filter((site: any) => site.id && site.id > 0).length;
     const cookieCount = sitesList.filter((site: any) => site.cookie && site.cookie.trim() !== '').length;
     const pending = getPendingCount();
     
@@ -272,6 +328,205 @@ onMounted(refreshAll);
 .profile { margin-bottom: 8px; }
 /* 让用户卡片整体向上微移，并增加与下方卡片的间距 */
 :deep(.user-card) { margin-top: -6px; margin-bottom: 8px; }
+
+.user-loading-card,
+.user-loading-info-card {
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+  border-radius: 14px;
+  background: #ffffff;
+  border: 1px solid rgba(0,0,0,0.06);
+  box-shadow: 0 6px 18px rgba(0,0,0,0.06);
+  padding: 12px;
+  pointer-events: none;
+}
+
+.user-loading-card {
+  margin-top: -6px;
+  margin-bottom: 8px;
+}
+
+.user-loading-info-card {
+  margin-top: 6px;
+}
+
+.user-loading-profile {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+.user-loading-avatar {
+  width: 64px;
+  height: 64px;
+  border-radius: 16px;
+  flex-shrink: 0;
+}
+
+.user-loading-meta {
+  flex: 1;
+  min-width: 0;
+}
+
+.user-loading-line {
+  height: 10px;
+  border-radius: 999px;
+}
+
+.user-loading-line.name {
+  width: 58%;
+  height: 18px;
+  margin-bottom: 10px;
+}
+
+.user-loading-badges {
+  display: flex;
+  gap: 6px;
+}
+
+.user-loading-badge {
+  width: 46px;
+  height: 22px;
+  border-radius: 6px;
+}
+
+.user-loading-button {
+  width: 54px;
+  height: 28px;
+  border-radius: 8px;
+  flex-shrink: 0;
+}
+
+.user-loading-divider {
+  height: 1px;
+  background: rgba(0,0,0,0.06);
+  margin: 8px 4px;
+}
+
+.user-loading-email {
+  width: 62%;
+  height: 12px;
+  border-radius: 999px;
+  margin: 4px 4px 10px;
+}
+
+.user-loading-sub-stats,
+.user-loading-stats-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  min-width: 0;
+}
+
+.user-loading-sub-stat {
+  min-width: 0;
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: #fff;
+  border: 1px solid rgba(0,0,0,0.05);
+  box-shadow: 0 2px 8px rgba(0,0,0,.04);
+}
+
+.user-loading-icon {
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+  flex-shrink: 0;
+}
+
+.user-loading-sub-text {
+  flex: 1;
+}
+
+.user-loading-line.count {
+  width: 36px;
+  height: 16px;
+  margin-bottom: 6px;
+}
+
+.user-loading-line.label {
+  width: 52px;
+  height: 9px;
+}
+
+.user-loading-stats-grid {
+  gap: 6px;
+}
+
+.user-loading-stat {
+  min-height: 42px;
+  border-radius: 6px;
+  background: #ffffff;
+  border: 1px solid rgba(0,0,0,0.05);
+  box-shadow: 0 1px 3px rgba(0,0,0,0.02);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 6px 4px;
+}
+
+.user-loading-line.stat-num {
+  width: 34px;
+  height: 16px;
+  margin-bottom: 5px;
+}
+
+.user-loading-line.stat-label {
+  width: 58px;
+  height: 9px;
+}
+
+.user-loading-version-title {
+  width: 126px;
+  height: 12px;
+  border-radius: 999px;
+  margin: 8px auto;
+}
+
+.user-loading-version-list {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+}
+
+.user-loading-version-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-width: 0;
+}
+
+.user-loading-line.version-label {
+  width: 92px;
+  max-width: 50%;
+  height: 10px;
+}
+
+.user-loading-line.version-value {
+  width: 86px;
+  max-width: 45%;
+  height: 10px;
+}
+
+.user-loading-shimmer {
+  background: linear-gradient(90deg, #edf2f7 25%, #f8fafc 37%, #edf2f7 63%);
+  background-size: 400% 100%;
+  animation: user-loading-shimmer 1.25s ease-in-out infinite;
+}
+
+@keyframes user-loading-shimmer {
+  0% { background-position: 100% 0; }
+  100% { background-position: 0 0; }
+}
 
 /* 综合信息卡片样式 */
 .comprehensive-info {

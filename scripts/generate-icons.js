@@ -1,3 +1,9 @@
+// ============================================================
+// 站点图标生成脚本
+// 从 scripts/site_favicon/ 读取 PNG 文件
+// 生成 src/shared/data/siteIcons.ts（Base64 内嵌）
+// ============================================================
+
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
@@ -5,8 +11,11 @@ import { fileURLToPath } from 'url';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-// 配置
+// ===== 路径配置 =====
+
+// 图标源目录
 const ICONS_DIR = path.join(__dirname, 'site_favicon');
+// 输出文件路径
 const OUTPUT_FILE = path.join(__dirname, '../src/shared/data/siteIcons.ts');
 
 // 确保输出目录存在

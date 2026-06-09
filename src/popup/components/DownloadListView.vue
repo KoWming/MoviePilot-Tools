@@ -1,8 +1,14 @@
 <template>
   <div class="download-list">
-    <!-- 加载状态（仅首次加载显示骨架屏） -->
-    <div v-if="isFirstLoad && downloads.length === 0" class="loading">
-      <el-skeleton :rows="3" animated />
+    <!-- 加载状态（仅首次加载显示中性提示，避免误导为必然存在下载任务） -->
+    <div v-if="isFirstLoad && downloads.length === 0" class="download-checking-state">
+      <div class="download-checking-indicator">
+        <span></span>
+        <span></span>
+        <span></span>
+      </div>
+      <div class="download-checking-title">正在检查下载任务</div>
+      <div class="download-checking-desc">加载完成后将显示下载任务或空状态</div>
     </div>
     
     <!-- 下载任务列表 -->
@@ -13,7 +19,7 @@
         :download="download"
         :downloader-name="downloaderName"
         @refresh="refresh"
-        @state-changed="onStateChanged"
+
       />
     </div>
     
@@ -25,27 +31,30 @@
 </template>
 
 <script setup lang="ts">
+// ============================================================
+// 下载列表视图组件
+// 批量操作、状态过滤、下载任务列表展示
+// ============================================================
 import { ref, onMounted, onUnmounted, watch } from 'vue';
 import { downloadApi, type DownloadingInfo } from '../../shared/api/download';
 import DownloadItem from './DownloadItem.vue';
 import { ElMessage } from 'element-plus';
 
+// ==================== Props ====================
 const props = defineProps<{
   downloaderName: string;
 }>();
 
+// ==================== 响应式状态 ====================
 const downloads = ref<DownloadingInfo[]>([]);
-// 追踪扩展内点击暂停的 hash，仅用于操作后的即时 UI 状态
-const pausedHashes = ref(new Set<string>());
-// 仅首次加载展示骨架屏
+// 仅首次加载展示检查中提示
 const isFirstLoad = ref(true);
-// 刷新状态（不影响骨架屏展示）
-const isRefreshing = ref(false);
 let refreshTimer: number | null = null;
 
-// 加载下载任务（可选：是否为首次加载）
+// ==================== 数据加载 ====================
+// 加载下载任务（first=true 时展示首次加载提示）
 async function loadDownloads(first = false) {
-  if (first) isFirstLoad.value = true; else isRefreshing.value = true;
+  if (first) isFirstLoad.value = true;
   try {
     const data = await downloadApi.getDownloading(props.downloaderName);
     downloads.value = await applyDirectTorrentStates(data ?? []);
@@ -53,10 +62,11 @@ async function loadDownloads(first = false) {
     console.error('加载下载任务失败:', error);
     ElMessage.error('加载下载任务失败');
   } finally {
-    if (first) isFirstLoad.value = false; else isRefreshing.value = false;
+    if (first) isFirstLoad.value = false;
   }
 }
 
+// 通过扩展后台直接查询下载器状态，修正 MP 接口返回的过期状态
 async function applyDirectTorrentStates(items: DownloadingInfo[]): Promise<DownloadingInfo[]> {
   const hashes = items.map(item => item.hash).filter(Boolean);
   if (!props.downloaderName || hashes.length === 0 || !chrome?.runtime?.sendMessage) {
@@ -83,27 +93,19 @@ async function applyDirectTorrentStates(items: DownloadingInfo[]): Promise<Downl
   }
 }
 
+// ==================== 刷新控制 ====================
 // 暴露给父组件的刷新方法
 function refresh() {
   return loadDownloads(false);
 }
 
-function onStateChanged(payload: { hash: string; state: string }) {
-  if (payload.state === 'paused') {
-    pausedHashes.value.add(payload.hash);
-  } else {
-    pausedHashes.value.delete(payload.hash);
-  }
-}
-
-defineExpose({ refresh });
-
-// 自动刷新
+// 自动刷新（每 5 秒）
 function startAutoRefresh() {
   stopAutoRefresh();
   refreshTimer = setInterval(() => loadDownloads(false), 5000);
 }
 
+// 停止自动刷新
 function stopAutoRefresh() {
   if (refreshTimer) {
     clearInterval(refreshTimer);
@@ -111,11 +113,11 @@ function stopAutoRefresh() {
   }
 }
 
-// 监听下载器变化
+// ==================== 生命周期 ====================
+// 监听下载器切换，重新加载
 watch(
   () => props.downloaderName,
   () => {
-    pausedHashes.value.clear();
     loadDownloads(true);
     startAutoRefresh();
   }
@@ -138,9 +140,67 @@ onUnmounted(() => {
   flex-direction: column;
 }
 
-.loading {
+.download-checking-state {
   flex: 1;
-  padding: 16px;
+  margin: 8px;
+  border-radius: 10px;
+  background: #fff;
+  border: 1px solid rgba(0, 0, 0, 0.06);
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.06);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  padding: 32px 16px;
+  pointer-events: none;
+}
+
+.download-checking-indicator {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  height: 24px;
+  margin-bottom: 10px;
+}
+
+.download-checking-indicator span {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #52c41a;
+  animation: download-checking-pulse 1.05s ease-in-out infinite;
+}
+
+.download-checking-indicator span:nth-child(2) {
+  animation-delay: 0.15s;
+}
+
+.download-checking-indicator span:nth-child(3) {
+  animation-delay: 0.3s;
+}
+
+.download-checking-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: #1f2937;
+  margin-bottom: 4px;
+}
+
+.download-checking-desc {
+  font-size: 12px;
+  color: #6b7280;
+}
+
+@keyframes download-checking-pulse {
+  0%, 80%, 100% {
+    opacity: 0.35;
+    transform: scale(0.85);
+  }
+  40% {
+    opacity: 1;
+    transform: scale(1);
+  }
 }
 
 .download-items {

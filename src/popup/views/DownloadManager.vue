@@ -1,7 +1,15 @@
 <template>
-  <div class="download-manager" v-loading="loadingClients">
+  <div class="download-manager">
+    <template v-if="loadingClients">
+      <div class="download-loading-state">
+        <div class="download-loading-spinner"></div>
+        <div class="download-loading-title">正在加载下载器</div>
+        <div class="download-loading-desc">请稍候，正在读取下载器配置...</div>
+      </div>
+    </template>
+
     <!-- 操作栏 -->
-    <div v-if="downloaders.length > 0" class="action-bar">
+    <div v-else-if="downloaders.length > 0" class="action-bar">
       <el-select 
         v-model="activeDownloader" 
         placeholder="选择下载器"
@@ -57,7 +65,7 @@
     </div>
     
     <!-- 下载列表视图 -->
-    <div v-if="downloaders.length > 0 && activeDownloader" class="download-content">
+    <div v-if="!loadingClients && downloaders.length > 0 && activeDownloader" class="download-content">
       <DownloadListView ref="listRef" :downloader-name="activeDownloader" />
     </div>
     
@@ -79,6 +87,10 @@
 </template>
 
 <script setup lang="ts">
+// ============================================================
+// 下载管理器视图
+// 编排下载组件：下载列表、添加下载对话框、批量操作
+// ============================================================
 import { ref, onMounted } from 'vue';
 import { Refresh, Plus, ArrowDown, Document, Link, Download } from '@element-plus/icons-vue';
 import { downloadApi, type DownloaderConf } from '../../shared/api/download';
@@ -244,6 +256,47 @@ onMounted(async () => {
   display: flex !important;
   align-items: center !important;
   justify-content: center !important;
+}
+
+.download-loading-state {
+  flex: 1;
+  margin: 8px;
+  border-radius: 10px;
+  background: #fff;
+  border: 1px solid rgba(0, 0, 0, 0.06);
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.06);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  padding: 32px 16px;
+}
+
+.download-loading-spinner {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  border: 3px solid rgba(82, 196, 26, 0.16);
+  border-top-color: #52c41a;
+  animation: download-loading-spin 0.9s linear infinite;
+  margin-bottom: 12px;
+}
+
+.download-loading-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: #1f2937;
+  margin-bottom: 4px;
+}
+
+.download-loading-desc {
+  font-size: 12px;
+  color: #6b7280;
+}
+
+@keyframes download-loading-spin {
+  to { transform: rotate(360deg); }
 }
 
 .download-content {

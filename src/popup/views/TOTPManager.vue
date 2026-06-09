@@ -78,7 +78,7 @@
     </div>
 
     <!-- Tab Horizontal Layout -->
-    <div class="totp-tabs" v-if="sites.length > 0">
+    <div class="totp-tabs">
       <div 
         class="totp-tab-item" 
         :class="{ active: currentTab === 'pt' }" 
@@ -96,8 +96,29 @@
     </div>
 
     <!-- 站点列表 -->
-    <div class="totp-grid" v-loading="loading">
-      <div v-if="filteredSites.length === 0" class="empty-state">
+    <div class="totp-grid">
+      <div v-if="loading && sites.length === 0" class="totp-loading-cards">
+        <div v-for="item in 3" :key="item" class="totp-loading-card">
+          <div class="totp-loading-main">
+            <div class="totp-loading-avatar totp-loading-shimmer"></div>
+            <div class="totp-loading-info">
+              <div class="totp-loading-line name totp-loading-shimmer"></div>
+              <div class="totp-loading-line domain totp-loading-shimmer"></div>
+            </div>
+            <div class="totp-loading-actions">
+              <div class="totp-loading-action totp-loading-shimmer"></div>
+              <div class="totp-loading-action totp-loading-shimmer"></div>
+              <div class="totp-loading-action totp-loading-shimmer"></div>
+            </div>
+          </div>
+          <div class="totp-loading-code-row">
+            <div class="totp-loading-code totp-loading-shimmer"></div>
+            <div class="totp-loading-timer totp-loading-shimmer"></div>
+          </div>
+        </div>
+      </div>
+
+      <div v-else-if="filteredSites.length === 0" class="empty-state">
         <svg viewBox="0 0 24 24" width="48" height="48" class="empty-icon">
           <path :d="mdiShieldKey"/>
         </svg>
@@ -325,6 +346,10 @@
 </template>
 
 <script setup lang="ts">
+// ============================================================
+// TOTP 两步验证管理器视图
+// 站点 CRUD、二维码扫描识别、验证码生成显示
+// ============================================================
 import { ref, computed, onMounted, onUnmounted, watch } from 'vue';
 import { ElMessage, ElMessageBox } from 'element-plus';
 import { 
@@ -345,7 +370,7 @@ import {
 } from '../../shared/utils/totp';
 import jsQR from 'jsqr';
 
-// 响应式数据
+// ==================== 响应式状态 ====================
 const sites = ref<TOTPSite[]>([]);
 const codes = ref<TOTPCode[]>([]);
 const mpSiteIcons = ref<Record<string, string>>({});
@@ -371,6 +396,7 @@ const webdavImportLoading = ref(false);
 const webdavImporting = ref(false);
 const webdavDeleting = ref(false);
 
+// ==================== 表单数据 ====================
 // 表单数据
 const siteForm = ref({
   name: '',
@@ -411,7 +437,7 @@ function decodeName(input?: string): string {
   }
 }
 
-// 计算属性
+// ==================== 计算属性 ====================
 const filteredSites = computed(() => {
   let filtered = sites.value.filter((site: TOTPSite) => getSiteCategory(site) === currentTab.value);
   
@@ -435,7 +461,7 @@ const filteredSites = computed(() => {
   });
 });
 
-// 方法
+// ==================== 数据加载 ====================
 const loadSites = async () => {
   try {
     loading.value = true;
@@ -477,6 +503,7 @@ const updateTimeInfo = () => {
   progress.value = calculateProgress();
 };
 
+// ==================== 验证码定时器 ====================
 const startRefreshTimer = () => {
   if (refreshTimer.value) {
     clearInterval(refreshTimer.value);
@@ -557,6 +584,7 @@ const getProgressForSite = (siteId: string): number => {
   return progress;
 };
 
+// ==================== 站点操作 ====================
 const copyCode = async (code: string) => {
   try {
     await navigator.clipboard.writeText(code);
@@ -609,6 +637,7 @@ const deleteSite = async (site: TOTPSite) => {
 
 
 
+// ==================== 二维码扫描 ====================
 const handleQRUpload = (file: any) => {
   const reader = new FileReader();
   reader.onload = (e) => {
@@ -850,6 +879,7 @@ const cancelEdit = () => {
   }
 };
 
+// ==================== 导入导出 ====================
 const requestTotpBackupKey = async (title: string, message: string, allowPrompt = true): Promise<string> => {
   const savedKey = await loadPtBackupKey();
   if (savedKey) return savedKey;
@@ -1043,7 +1073,8 @@ const handleImportFile = async (file: any) => {
   }
 };
 
-// WebDav: 构建基础路径与认证头
+// ==================== WebDav 操作 ====================
+// 构建基础路径与认证头
 const buildWebDavContext = async (cfg: any) => {
   const url = await decryptWebDavUrl(cfg.webdav_url);
   const base = (url as string).replace(/\/$/, '');
@@ -1232,12 +1263,7 @@ const deleteSelectedWebDavBackup = async () => {
   }
 };
 
-// 已并入 handleMoreCommand 统一处理
-
-const formatDate = (dateString: string): string => {
-  return new Date(dateString).toLocaleDateString();
-};
-
+// ==================== 工具函数 ====================
 // 若开启“配置变化备份”，且配置完整，则导出到 WebDav
 const tryAutoBackupOnChange = async () => {
   try {
@@ -1252,6 +1278,7 @@ const tryAutoBackupOnChange = async () => {
   }
 };
 
+// ==================== MP 图标获取 ====================
 // 异步拉取 MoviePilot 后端的所有站点图标作为 TOTP 匹配缓存
 async function fetchMpSiteIcons() {
   try {
@@ -1304,7 +1331,7 @@ async function fetchMpSiteIcons() {
   }
 }
 
-// 生命周期
+// ==================== 生命周期 ====================
 onMounted(async () => {
   // 先加载站点数据，确保验证码生成完成后再启动定时器
   await loadSites();
@@ -1708,15 +1735,6 @@ function getTotpSiteIcon(site: TOTPSite): string | null {
 }
 
 
-.dropdown-wrapper {
-  flex: 1;
-  margin-left: 5px;
-}
-
-.dropdown-wrapper:first-child {
-  margin-left: 0;
-}
-
 .icon-btn {
   margin-right: 4px;
   vertical-align: -2px;
@@ -1757,38 +1775,12 @@ function getTotpSiteIcon(site: TOTPSite): string | null {
 
 /* .refresh-status has been removed */
 
-.time-info {
-  text-align: center;
-  font-size: 14px;
-  color: #666;
-}
-
-.time {
-  font-weight: bold;
-  color: #409eff;
-}
-
-.progress {
-  width: 100%;
-  height: 4px;
-  background: rgba(0, 0, 0, 0.1);
-  border-radius: 2px;
-  overflow: hidden;
-  margin-top: 8px;
-}
-
-.progress-bar {
-  height: 100%;
-  background: #409eff;
-  transition: width 0.5s linear;
-}
-
 .totp-grid {
   flex: 1;
   overflow-y: auto;
   padding: 8px;
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  grid-template-columns: minmax(0, 1fr);
   gap: 12px;
   min-height: 200px;
 }
@@ -1815,12 +1807,112 @@ function getTotpSiteIcon(site: TOTPSite): string | null {
   gap: 10px;
 }
 
+.totp-loading-cards {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.totp-loading-card {
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+  border-radius: 12px;
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.02);
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  pointer-events: none;
+}
+
+.totp-loading-main {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+}
+
+.totp-loading-avatar {
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+  flex-shrink: 0;
+}
+
+.totp-loading-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.totp-loading-line {
+  height: 9px;
+  border-radius: 999px;
+}
+
+.totp-loading-line.name {
+  width: 58%;
+  height: 12px;
+  margin-bottom: 7px;
+}
+
+.totp-loading-line.domain {
+  width: 76%;
+}
+
+.totp-loading-actions {
+  display: flex;
+  overflow: hidden;
+  border-radius: 6px;
+  border: 1px solid #e2e8f0;
+  flex-shrink: 0;
+}
+
+.totp-loading-action {
+  width: 31px;
+  height: 28px;
+}
+
+.totp-loading-code-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px dashed #e2e8f0;
+}
+
+.totp-loading-code {
+  width: 112px;
+  max-width: 60%;
+  height: 18px;
+  border-radius: 999px;
+}
+
+.totp-loading-timer {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+}
+
+.totp-loading-shimmer {
+  background: linear-gradient(90deg, #edf2f7 25%, #f8fafc 37%, #edf2f7 63%);
+  background-size: 400% 100%;
+  animation: totp-loading-shimmer 1.25s ease-in-out infinite;
+}
+
+@keyframes totp-loading-shimmer {
+  0% { background-position: 100% 0; }
+  100% { background-position: 0 0; }
+}
+
 .totp-card {
   border-radius: 12px;
-  background: rgba(255, 255, 255, 0.85);
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
-  border: 1px solid rgba(226, 232, 240, 0.8);
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
   box-shadow: 0 2px 4px rgba(0, 0, 0, 0.02);
   padding: 12px;
   display: flex;
@@ -1931,11 +2023,6 @@ function getTotpSiteIcon(site: TOTPSite): string | null {
 
 .text-danger {
   color: #ef4444;
-}
-
-.delete-btn:hover {
-  background: #fef2f2 !important;
-  color: #ef4444 !important;
 }
 
 .delete-menu-item:hover {
@@ -2076,33 +2163,6 @@ function getTotpSiteIcon(site: TOTPSite): string | null {
 .upload-hint {
   font-size: 12px;
   color: #999;
-}
-
-.ml-1 {
-  margin-left: 4px;
-}
-
-.auto-save-indicator {
-  text-align: center;
-  margin-top: 8px;
-  padding: 4px 8px;
-  background: rgba(64, 158, 255, 0.1);
-  border-radius: 4px;
-  border: 1px solid rgba(64, 158, 255, 0.2);
-}
-
-.save-text {
-  font-size: 12px;
-  color: #409eff;
-  font-weight: 500;
-}
-
-/* WebDav 用户名/密码 同行布局 */
-.userpass-row {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 8px;
-  width: 100%;
 }
 
 /* WebDav 对话框两列布局与辅助类 */

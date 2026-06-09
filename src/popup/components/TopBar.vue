@@ -11,16 +11,53 @@
 </template>
 
 <script setup lang="ts">
+// ============================================================
+// 顶部栏组件
+// 当前视图标题、图标、"打开 Web 端"按钮
+// ============================================================
+
 defineProps<{ title: string; icon: string; showWebBtn?: boolean }>();
 defineEmits(['openWeb']);
 </script>
 
 <style scoped>
-.topbar { height: 44px; display:flex; align-items:center; justify-content:space-between; padding: 0 10px; border-bottom: 1px solid rgba(0,0,0,.06); background: #ffffff; position: sticky; top:0; z-index: 10; }
-.left { display:flex; align-items:center; gap:8px; }
-.title { font-weight: 600; font-size: 13px; color:#34495e; }
-.right { display:flex; gap:6px; }
-.title-icon { width: 16px; height: 16px; fill: currentColor; color: var(--topbar-icon-color, #34495e); opacity:.9; }
+.topbar {
+  height: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 10px;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.06);
+  background: #ffffff;
+  position: sticky;
+  top: 0;
+  z-index: 10;
+}
+
+.left {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.title {
+  font-weight: 600;
+  font-size: 13px;
+  color: #34495e;
+}
+
+.right {
+  display: flex;
+  gap: 6px;
+}
+
+.title-icon {
+  width: 16px;
+  height: 16px;
+  fill: currentColor;
+  color: var(--topbar-icon-color, #34495e);
+  opacity: 0.9;
+}
 </style>
 
 

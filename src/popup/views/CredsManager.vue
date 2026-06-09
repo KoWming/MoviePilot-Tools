@@ -1,4 +1,4 @@
-<template>
+﻿<template>
   <div class="pt-manager-root">
     <!-- Header/Toolbar -->
     <div class="toolbar">
@@ -71,7 +71,7 @@
     />
 
     <!-- Tab Horizontal Layout -->
-    <div class="pt-tabs" v-if="ptCredsList.length > 0">
+    <div class="pt-tabs">
       <div 
         class="pt-tab-item" 
         :class="{ active: currentTab === 'pt' }" 
@@ -89,8 +89,30 @@
     </div>
 
     <!-- Main List Grid -->
-    <div class="pt-grid" v-loading="ptManagerLoading">
-      <div v-if="filteredPtCreds.length === 0" class="empty-state">
+    <div class="pt-grid">
+      <div v-if="ptManagerLoading && ptCredsList.length === 0" class="pt-loading-cards">
+        <div v-for="item in 3" :key="item" class="pt-loading-card">
+          <div class="pt-loading-main">
+            <div class="pt-loading-avatar pt-loading-shimmer"></div>
+            <div class="pt-loading-info">
+              <div class="pt-loading-line name pt-loading-shimmer"></div>
+              <div class="pt-loading-line domain pt-loading-shimmer"></div>
+              <div class="pt-loading-line username pt-loading-shimmer"></div>
+            </div>
+            <div class="pt-loading-actions">
+              <div class="pt-loading-action pt-loading-shimmer"></div>
+              <div class="pt-loading-action pt-loading-shimmer"></div>
+              <div class="pt-loading-action pt-loading-shimmer"></div>
+            </div>
+          </div>
+          <div class="pt-loading-password-row">
+            <div class="pt-loading-password pt-loading-shimmer"></div>
+            <div class="pt-loading-time pt-loading-shimmer"></div>
+          </div>
+        </div>
+      </div>
+
+      <div v-else-if="filteredPtCreds.length === 0" class="empty-state">
         <svg viewBox="0 0 24 24" width="48" height="48" class="empty-icon">
           <path :d="mdiKeyOutline"/>
         </svg>
@@ -295,6 +317,10 @@
 </template>
 
 <script setup lang="ts">
+// ============================================================
+// PT 凭据管理器视图
+// 站点凭据表格 CRUD、加密备份导入/导出
+// ============================================================
 import { computed, onMounted, reactive, ref, watch } from 'vue';
 import { ElMessage, ElMessageBox } from 'element-plus';
 import {
@@ -311,15 +337,16 @@ import { createMpApiClient } from '../../shared/api/client';
 import { getSiteIcon } from '../../shared/data/siteIcons';
 import { decryptPtBackup, encryptPtBackup, isPtBackupEnvelope, loadPtBackupKey, savePtBackupKey } from '../../shared/ptBackupCrypto';
 
+// ==================== 响应式状态 ====================
 const ptSearchKeyword = ref('');
-const ptManagerLoading = ref(false);
+const ptManagerLoading = ref(true);
 const ptCredsList = ref<PTCredential[]>([]);
 const visiblePasswords = reactive<Record<string, boolean>>({});
 const siteMapping = ref<Record<string, string>>({});
 const currentTab = ref<'pt' | 'custom'>('pt');
 const siteIcons = ref<Record<string, string>>({});
 
-// WebDav 备份选择还原状态
+// ==================== WebDav 备份状态 ====================
 const showPtWebDavImportDialog = ref(false);
 type PtWebDavBackupFile = { name: string; url: string; lastModified?: number; size?: number; };
 const ptWebDavBackups = ref<PtWebDavBackupFile[]>([]);
@@ -328,7 +355,7 @@ const ptWebDavImportLoading = ref(false);
 const ptWebDavImporting = ref(false);
 const ptWebDavDeleting = ref(false);
 
-// Add/Edit Dialog State
+// ==================== 表单状态 ====================
 const ptAddEditDialogVisible = ref(false);
 const ptAddEditMode = ref<'add' | 'edit'>('add');
 const ptFormSaving = ref(false);
@@ -343,12 +370,12 @@ const ptCredForm = reactive({
 const ptCredFormRef = ref();
 const ptFileInput = ref<HTMLInputElement | null>(null);
 
-// PIN dialog state for PT
+// ==================== PIN 验证状态 ====================
 const ptPinDialogVisible = ref(false);
 const ptPinInput = ref('');
 let ptPinSuccessCallback: (() => void) | null = null;
 
-// Rules
+// ==================== 表单验证规则 ====================
 const ptCredRules = {
   domain: [
     { required: true, message: '请输入站点域名', trigger: 'blur' },
@@ -362,6 +389,7 @@ const ptCredRules = {
   ]
 };
 
+// ==================== 计算属性 ====================
 const filteredPtCreds = computed(() => {
   const filtered = ptCredsList.value.filter(item => getCredCategory(item) === currentTab.value);
   const kw = ptSearchKeyword.value.toLowerCase().trim();
@@ -372,11 +400,13 @@ const filteredPtCreds = computed(() => {
   );
 });
 
+// ==================== 生命周期 ====================
 onMounted(async () => {
   // 先加载站点映射，确保列表渲染时 siteMapping 已就绪，避免名称从域名闪烁为中文
   await fetchSiteMapping();
   await loadPtCreds();
 });
+// ==================== 存储工具 ====================
 
 async function getToken(): Promise<string | undefined> {
   const data = await chrome.storage.local.get([STORAGE_KEYS.TOKEN]);
@@ -399,6 +429,7 @@ async function getBaseUrl(): Promise<string> {
   } catch {}
   return '';
 }
+// ==================== 站点映射 ====================
 
 async function fetchSiteMapping() {
   try {
@@ -412,6 +443,7 @@ async function fetchSiteMapping() {
     console.error('获取站点 mapping 失败:', err);
   }
 }
+// ==================== 域名自动填充 ====================
 
 watch(() => ptCredForm.domain, (newVal) => {
   if (ptAddEditMode.value === 'add' && newVal) {
@@ -427,6 +459,7 @@ watch(() => ptCredForm.domain, (newVal) => {
     }
   }
 });
+// ==================== 站点操作 ====================
 
 async function openSite(domain: string) {
   try {
@@ -446,12 +479,12 @@ async function openSite(domain: string) {
   }
 }
 
+// ==================== 凭据加载 ====================
 async function loadPtCreds() {
   ptManagerLoading.value = true;
   try {
     ptCredsList.value = await PTCredentialStorageService.getCredentials();
-    // 异步获取所有站点图标
-    ptCredsList.value.forEach(cred => {
+        ptCredsList.value.forEach(cred => {
       if (cred.domain) {
         fetchSiteIcon(cred.domain);
       }
@@ -463,6 +496,7 @@ async function loadPtCreds() {
   }
 }
 
+// ==================== PIN 安全验证 ====================
 function normalizePinInput(value: string): string {
   return value.replace(/\D/g, '').slice(0, 6);
 }
@@ -499,6 +533,7 @@ async function runWithPinProtection(callback: () => void) {
   }
 }
 
+// ==================== 密码操作 ====================
 function togglePasswordVisibility(item: PTCredential) {
   if (visiblePasswords[item.id]) {
     visiblePasswords[item.id] = false;
@@ -527,6 +562,7 @@ function copyUsername(username: string) {
   });
 }
 
+// ==================== 凭据增删改 ====================
 function showPtAddEditDialog(mode: 'add' | 'edit', item?: PTCredential) {
   ptAddEditMode.value = mode;
   if (mode === 'edit' && item) {
@@ -598,6 +634,7 @@ async function handleDeletePtCred(item: PTCredential) {
   });
 }
 
+// ==================== 命令分发 ====================
 function handleMoreCommand(command: string) {
   if (command === 'refresh') {
     loadPtCreds();
@@ -622,6 +659,7 @@ function handleCardCommand(command: string, item: PTCredential) {
   }
 }
 
+// ==================== 分组管理 ====================
 function getCredCategory(item: PTCredential): 'pt' | 'custom' {
   if (item.category) return item.category;
   return item.domain ? 'pt' : 'custom';
@@ -644,6 +682,7 @@ async function toggleCredCategory(item: PTCredential) {
   }
 }
 
+// ==================== 本地 JSON 导入导出 ====================
 async function exportPtCredsToJson() {
   try {
     const credentials = await PTCredentialStorageService.getCredentials();
@@ -675,6 +714,7 @@ async function exportPtCredsToJson() {
   }
 }
 
+// ==================== 备份密钥管理 ====================
 async function requestPtBackupKey(title: string, message: string, allowPrompt = true): Promise<string> {
   const savedKey = await loadPtBackupKey();
   if (savedKey) return savedKey;
@@ -732,6 +772,7 @@ async function decryptPtBackupPayload(payload: unknown): Promise<{ credentials: 
   }
 }
 
+// ==================== WebDav 操作 ====================
 async function exportPtCredsToWebDav(allowKeyPrompt = true) {
   ptManagerLoading.value = true;
   try {
@@ -802,8 +843,7 @@ async function exportPtCredsToWebDav(allowKeyPrompt = true) {
     }
 
     if (response.ok) {
-      // 处理保留份数：若设置了保留份数且>0，则清理多余旧备份
-      try {
+            try {
         const cfg = await chrome.storage.sync.get(['webdav_retain_count']);
         const retain = Number(cfg.webdav_retain_count) || 0;
         if (retain > 0) {
@@ -832,8 +872,6 @@ async function exportPtCredsToWebDav(allowKeyPrompt = true) {
     ptManagerLoading.value = false;
   }
 }
-
-// ========== WebDav 备份列表选择还原 ==========
 
 async function buildPtWebDavContext(cfg: Record<string, any>) {
   const url = await decryptWebDavUrl(cfg.webdav_url);
@@ -970,8 +1008,7 @@ async function importSelectedPtWebDavBackup() {
     const decryptedStore = await decryptPtBackupPayload(payload);
     const importedList = decryptedStore?.credentials || [];
 
-    // 合并到本地
-    const currentList = await PTCredentialStorageService.getCredentials();
+        const currentList = await PTCredentialStorageService.getCredentials();
     const mergedList = [...currentList];
     for (const imp of importedList) {
       const idx = mergedList.findIndex(c => c.domain.toLowerCase().trim() === imp.domain.toLowerCase().trim());
@@ -1055,6 +1092,7 @@ async function deleteSelectedPtWebDavBackup() {
   }
 }
 
+// ==================== 文件导入 ====================
 async function onPtFileSelected(event: Event) {
   const target = event.target as HTMLInputElement;
   const file = target.files?.[0];
@@ -1114,6 +1152,7 @@ async function onPtFileSelected(event: Event) {
   }
 }
 
+// ==================== 工具函数 ====================
 function formatDate(isoString: string): string {
   if (!isoString) return '-';
   try {
@@ -1151,17 +1190,15 @@ function getAvatarBg(domain: string): string {
   return gradients[index];
 }
 
-// 站点图标（优先本地 Base64，支持子域名自动回滚至主域名匹配）
+// ==================== 站点图标 ====================
 function getLocalSiteIcon(domain: string): string | null {
   try {
-    // 优先检查从服务器获取的图标
-    if (siteIcons.value[domain]) return siteIcons.value[domain];
+        if (siteIcons.value[domain]) return siteIcons.value[domain];
     
     let icon = getSiteIcon(domain);
     if (icon) return icon;
 
-    // 自动剥离多级子域名尝试主域名匹配 (如 xp.m-team.io -> m-team.io)
-    const parts = domain.split('.');
+        const parts = domain.split('.');
     if (parts.length > 2) {
       const mainDomain = parts.slice(-2).join('.');
       icon = getSiteIcon(mainDomain);
@@ -1173,27 +1210,24 @@ function getLocalSiteIcon(domain: string): string | null {
   }
 }
 
-// 从服务器获取站点图标
+// 从 MP 服务器获取站点图标
 async function fetchSiteIcon(domain: string) {
   if (!domain || !domain.includes('.')) return;
 
-  // 优先本地图标
-  const localIcon = getLocalSiteIcon(domain);
+    const localIcon = getLocalSiteIcon(domain);
   if (localIcon) {
     siteIcons.value[domain] = localIcon;
     return;
   }
 
-  // 本地图标不存在则通过 API 获取
-  try {
+    try {
     const baseUrl = await getBaseUrl();
     const token = await getToken();
     if (!baseUrl || !token) return;
     
     const client = createMpApiClient({ baseURL: baseUrl, getToken });
     
-    // 先获取站点列表，找到域名对应的站点 ID
-    const sitesResp = await client.get('/api/v1/site/');
+        const sitesResp = await client.get('/api/v1/site/');
     let sitesData: any[] = [];
     const responseData = sitesResp.data;
     if (Array.isArray(responseData)) {
@@ -1204,8 +1238,7 @@ async function fetchSiteIcon(domain: string) {
       sitesData = responseData.sites;
     }
     
-    // 找到匹配域名的站点
-    const site = sitesData.find((s: any) => {
+        const site = sitesData.find((s: any) => {
       try {
         const siteDomain = new URL(s.url).hostname;
         return siteDomain === domain || siteDomain.endsWith(`.${domain}`) || domain.endsWith(`.${siteDomain}`);
@@ -1215,12 +1248,10 @@ async function fetchSiteIcon(domain: string) {
     });
     
     if (!site || !site.id) {
-      console.log(`未找到站点 ${domain} 对应的站点 ID`);
       return;
     }
     
-    // 使用站点 ID 获取图标
-    const iconResp = await client.get(`/api/v1/site/icon/${site.id}`);
+        const iconResp = await client.get(`/api/v1/site/icon/${site.id}`);
     let iconData = null;
     if (iconResp.data?.success && typeof iconResp.data?.data?.icon === 'string') {
       iconData = iconResp.data.data.icon;
@@ -1441,6 +1472,114 @@ async function fetchSiteIcon(domain: string) {
   display: flex;
   flex-direction: column;
   gap: 10px;
+}
+
+.pt-loading-cards {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.pt-loading-card {
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+  border-radius: 12px;
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.02);
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  pointer-events: none;
+}
+
+.pt-loading-main {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+}
+
+.pt-loading-avatar {
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+  flex-shrink: 0;
+}
+
+.pt-loading-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.pt-loading-line {
+  height: 9px;
+  border-radius: 999px;
+}
+
+.pt-loading-line.name {
+  width: 58%;
+  height: 12px;
+  margin-bottom: 7px;
+}
+
+.pt-loading-line.domain {
+  width: 76%;
+  margin-bottom: 7px;
+}
+
+.pt-loading-line.username {
+  width: 46%;
+}
+
+.pt-loading-actions {
+  display: flex;
+  overflow: hidden;
+  border-radius: 6px;
+  border: 1px solid #e2e8f0;
+  flex-shrink: 0;
+}
+
+.pt-loading-action {
+  width: 31px;
+  height: 28px;
+}
+
+.pt-loading-password-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px dashed #e2e8f0;
+}
+
+.pt-loading-password {
+  width: 124px;
+  max-width: 56%;
+  height: 18px;
+  border-radius: 999px;
+}
+
+.pt-loading-time {
+  width: 108px;
+  max-width: 40%;
+  height: 10px;
+  border-radius: 999px;
+}
+
+.pt-loading-shimmer {
+  background: linear-gradient(90deg, #edf2f7 25%, #f8fafc 37%, #edf2f7 63%);
+  background-size: 400% 100%;
+  animation: pt-loading-shimmer 1.25s ease-in-out infinite;
+}
+
+@keyframes pt-loading-shimmer {
+  0% { background-position: 100% 0; }
+  100% { background-position: 0 0; }
 }
 
 .pt-card {

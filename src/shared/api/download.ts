@@ -1,4 +1,5 @@
 import { createMpApiClient } from './client';
+import { STORAGE_KEYS } from '../constants';
 
 export interface DownloadingInfo {
   hash: string;
@@ -129,13 +130,13 @@ class DownloadApi {
       baseURL: '',
       getToken: async (): Promise<string | undefined> => {
         // local 优先，sync 回退兼容旧版本
-        const localData = await chrome.storage.local.get(['mp.token']);
-        if (localData['mp.token']) return localData['mp.token'] as string;
+        const localData = await chrome.storage.local.get([STORAGE_KEYS.TOKEN]);
+        if (localData[STORAGE_KEYS.TOKEN]) return localData[STORAGE_KEYS.TOKEN] as string;
         try {
-          const syncData = await chrome.storage.sync.get(['mp.token']);
-          const syncToken = syncData['mp.token'] as string | undefined;
+          const syncData = await chrome.storage.sync.get([STORAGE_KEYS.TOKEN]);
+          const syncToken = syncData[STORAGE_KEYS.TOKEN] as string | undefined;
           if (syncToken) {
-            await chrome.storage.local.set({ 'mp.token': syncToken });
+            await chrome.storage.local.set({ [STORAGE_KEYS.TOKEN]: syncToken });
             return syncToken;
           }
         } catch {}
@@ -145,13 +146,13 @@ class DownloadApi {
   }
 
   private async getBaseURL(): Promise<string> {
-    const localData = await chrome.storage.local.get(['mp.base_url']);
-    if (localData['mp.base_url']) return localData['mp.base_url'] as string;
+    const localData = await chrome.storage.local.get([STORAGE_KEYS.BASE_URL]);
+    if (localData[STORAGE_KEYS.BASE_URL]) return localData[STORAGE_KEYS.BASE_URL] as string;
     try {
-      const syncData = await chrome.storage.sync.get(['mp.base_url']);
-      const syncUrl = syncData['mp.base_url'] as string | undefined;
+      const syncData = await chrome.storage.sync.get([STORAGE_KEYS.BASE_URL]);
+      const syncUrl = syncData[STORAGE_KEYS.BASE_URL] as string | undefined;
       if (syncUrl) {
-        await chrome.storage.local.set({ 'mp.base_url': syncUrl });
+        await chrome.storage.local.set({ [STORAGE_KEYS.BASE_URL]: syncUrl });
         return syncUrl;
       }
     } catch {}

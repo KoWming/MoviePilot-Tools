@@ -1,3 +1,8 @@
+// ============================================================
+// PIN 安全验证模块
+// PBKDF2 哈希 PIN、设置/验证/禁用 PIN、会话解锁状态管理
+// ============================================================
+
 import { STORAGE_KEYS } from './constants';
 
 export type PinVerifyFrequency = 'session' | 'always';

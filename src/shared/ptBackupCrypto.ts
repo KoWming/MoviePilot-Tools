@@ -1,6 +1,13 @@
+// ============================================================
+// PT 凭据备份加密模块
+// 使用 PBKDF2 + AES-GCM 对 PT 站点凭据进行加密导出/导入
+// 支持 PT 凭据备份和 TOTP 数据备份两种格式
+// ============================================================
+
 import { encryptObject, decryptObject, type EncryptedPayload } from './secureStorage';
 import { STORAGE_KEYS } from './constants';
 
+// PT 凭据备份信封
 export interface PtBackupEnvelope {
   type: 'pt-credentials-backup';
   version: 2;
@@ -12,6 +19,7 @@ export interface PtBackupEnvelope {
   ciphertext: string;
 }
 
+// TOTP 备份信封
 export interface TotpBackupEnvelope {
   type: 'totp-backup';
   version: 2;
@@ -23,8 +31,12 @@ export interface TotpBackupEnvelope {
   ciphertext: string;
 }
 
+// ===== 加密参数 =====
+
 const PT_BACKUP_ITERATIONS = 600_000;
 const PT_BACKUP_PEPPER = 'mp-ext-pt-backup-v1';
+
+// ===== 工具函数 =====
 
 function toBase64(buf: ArrayBuffer): string {
   return btoa(String.fromCharCode(...new Uint8Array(buf)));

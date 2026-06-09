@@ -1,3 +1,8 @@
+// ============================================================
+// 站点相关 TypeScript 类型定义
+// Site 接口 & SiteUserData 接口（含预计算状态和差异检测字段）
+// ============================================================
+
 export interface Site {
   id?: number;
   name: string;
@@ -27,6 +32,19 @@ export interface Site {
   uaDiff?: boolean;
   // 禁用状态字段
   isDisabled?: boolean;
+  isUpdateDisabled?: boolean;
+  // 浏览器 Cookie 缓存
+  browserCookies?: string;
+  // 预计算状态（用于筛选）
+  status?: {
+    browser: boolean;      // 浏览器中存在（适配站点有 Cookie）
+    server: boolean;       // 服务端已配置
+    cookieDiff: boolean;   // Cookie 差异
+    uaDiff: boolean;       // UA 差异
+    notLoggedIn: boolean;  // 服务端已配置但浏览器未登录
+    notAdded: boolean;     // 已适配但未配置
+    noSite: boolean;       // 浏览器有 Cookie 但未适配
+  };
 }
 
 export interface SiteUserData {

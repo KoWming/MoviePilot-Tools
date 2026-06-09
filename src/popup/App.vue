@@ -115,6 +115,11 @@
 </template>
 
 <script setup lang="ts">
+// ============================================================
+// MoviePilot Tools - 主应用组件
+// 路由/视图切换、登录表单、PIN 锁屏、自定义背景、主题支持
+// ============================================================
+
 import { reactive, ref, onMounted, onUnmounted, computed, nextTick, watch } from 'vue';
 import { loginByPassword } from '../shared/api/auth';
 import { mdiLink, mdiAccount, mdiLockOutline, mdiChartLine, mdiWeb, mdiShieldKey, mdiPuzzleOutline, mdiDownload, mdiInformationOutline, mdiCogOutline, mdiKeyOutline } from '@mdi/js';
@@ -547,17 +552,48 @@ html.has-custom-bg-body, body.has-custom-bg-body, .has-custom-bg-body #app {
 .popup-root.has-custom-bg .settings-card,
 .popup-root.has-custom-bg .card,
 .popup-root.has-custom-bg .pt-card,
+.popup-root.has-custom-bg .pt-loading-card,
 .popup-root.has-custom-bg .totp-card,
+.popup-root.has-custom-bg .totp-loading-card,
 .popup-root.has-custom-bg .site-card,
+.popup-root.has-custom-bg .site-loading-card,
+.popup-root.has-custom-bg .sites-loading-card,
 .popup-root.has-custom-bg .ov-card,
 .popup-root.has-custom-bg .download-card,
+.popup-root.has-custom-bg .download-loading-state,
+.popup-root.has-custom-bg .download-checking-state,
 .popup-root.has-custom-bg .comprehensive-card,
+.popup-root.has-custom-bg .user-loading-card,
+.popup-root.has-custom-bg .user-loading-info-card,
 .popup-root.has-custom-bg .site-management .toolbar {
   background: rgba(255, 255, 255, 0.45) !important;
   backdrop-filter: blur(12px) saturate(110%);
   -webkit-backdrop-filter: blur(12px) saturate(110%);
   border: 1px solid rgba(255, 255, 255, 0.25) !important;
   box-shadow: 0 4px 16px rgba(0, 0, 0, 0.05) !important;
+}
+
+.popup-root.has-custom-bg .site-loading-shimmer {
+  background: linear-gradient(90deg, rgba(255, 255, 255, 0.24) 25%, rgba(255, 255, 255, 0.56) 37%, rgba(255, 255, 255, 0.24) 63%) !important;
+  background-size: 400% 100% !important;
+  backdrop-filter: blur(4px) !important;
+  -webkit-backdrop-filter: blur(4px) !important;
+}
+
+.popup-root.has-custom-bg .sites-loading-shimmer {
+  background: linear-gradient(90deg, rgba(255, 255, 255, 0.24) 25%, rgba(255, 255, 255, 0.56) 37%, rgba(255, 255, 255, 0.24) 63%) !important;
+  background-size: 400% 100% !important;
+  backdrop-filter: blur(4px) !important;
+  -webkit-backdrop-filter: blur(4px) !important;
+}
+
+.popup-root.has-custom-bg .pt-loading-shimmer,
+.popup-root.has-custom-bg .totp-loading-shimmer,
+.popup-root.has-custom-bg .user-loading-shimmer {
+  background: linear-gradient(90deg, rgba(255, 255, 255, 0.24) 25%, rgba(255, 255, 255, 0.56) 37%, rgba(255, 255, 255, 0.24) 63%) !important;
+  background-size: 400% 100% !important;
+  backdrop-filter: blur(4px) !important;
+  -webkit-backdrop-filter: blur(4px) !important;
 }
 
 /* Make PT manager and TOTP manager toolbars transparent under custom background */
@@ -621,6 +657,9 @@ html.has-custom-bg-body, body.has-custom-bg-body, .has-custom-bg-body #app {
 }
 .popup-root.has-custom-bg .stat-config {
   background: linear-gradient(135deg, rgba(227, 242, 253, 0.55) 0%, rgba(243, 229, 245, 0.55) 100%) !important;
+}
+.popup-root.has-custom-bg .stat-supporting {
+  background: linear-gradient(135deg, rgba(224, 247, 250, 0.55) 0%, rgba(232, 245, 233, 0.55) 100%) !important;
 }
 .popup-root.has-custom-bg .stat-enabled {
   background: linear-gradient(135deg, rgba(232, 245, 232, 0.55) 0%, rgba(241, 248, 233, 0.55) 100%) !important;
@@ -906,6 +945,10 @@ html.has-custom-bg-body, body.has-custom-bg-body, .has-custom-bg-body #app {
   color: #334155 !important;
 }
 .popup-root.has-custom-bg .pt-card .card-password-row {
+  border-top-color: rgba(0, 0, 0, 0.08) !important;
+}
+.popup-root.has-custom-bg .totp-card .card-code-row,
+.popup-root.has-custom-bg .totp-loading-card .totp-loading-code-row {
   border-top-color: rgba(0, 0, 0, 0.08) !important;
 }
 .popup-root.has-custom-bg .pt-manager-root .card-actions {
@@ -1219,6 +1262,41 @@ html.mobile-root, body.mobile-root, .mobile-root #app { width: 100%; height: 100
   color: #94a3b8;
 }
 
+/* 适配移动端底部菜单栏深色模式 */
+.mobile-root [data-theme="dark"] .sidebar {
+  background: #1e293b !important;
+  border-top: 1px solid #334155 !important;
+  border-right: none !important;
+  box-shadow: 0 -4px 16px rgba(0, 0, 0, 0.25) !important;
+}
+
+.mobile-root [data-theme="dark"] .sidebar .item {
+  color: #94a3b8 !important;
+}
+
+.mobile-root [data-theme="dark"] .sidebar .item svg {
+  color: #94a3b8 !important;
+}
+
+.mobile-root [data-theme="dark"] .sidebar .item:active {
+  background: rgba(255, 255, 255, 0.08) !important;
+}
+
+.mobile-root [data-theme="dark"] .sidebar .item.active {
+  background: rgba(59, 130, 246, 0.15) !important;
+  color: #60a5fa !important;
+}
+
+.mobile-root [data-theme="dark"] .sidebar .item.active svg {
+  color: #60a5fa !important;
+}
+
+.mobile-root [data-theme="dark"] .sidebar .item::before {
+  background: #60a5fa !important;
+  box-shadow: 0 0 8px rgba(96, 165, 250, 0.6) !important;
+}
+
+
 [data-theme="dark"] .sidebar .item {
   color: #94a3b8;
 }
@@ -1292,14 +1370,13 @@ html.mobile-root, body.mobile-root, .mobile-root #app { width: 100%; height: 100
   box-shadow: 0 0 0 1px #334155 inset !important;
 }
 
-[data-theme="dark"] .form-row-two input,
-[data-theme="dark"] .form input,
 [data-theme="dark"] .el-input__inner {
   background: transparent !important;
   border: none !important;
   box-shadow: none !important;
   color: #e2e8f0 !important;
 }
+
 
 [data-theme="dark"] .el-textarea__inner {
   background: #0f172a !important;
@@ -1569,6 +1646,17 @@ html.mobile-root, body.mobile-root, .mobile-root #app { width: 100%; height: 100
   border-color: #334155 !important;
 }
 
+[data-theme="dark"] .site-management .site-loading-card {
+  background: #1e293b !important;
+  border-color: #334155 !important;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3) !important;
+}
+
+[data-theme="dark"] .site-management .site-loading-shimmer {
+  background: linear-gradient(90deg, #334155 25%, #475569 37%, #334155 63%) !important;
+  background-size: 400% 100% !important;
+}
+
 [data-theme="dark"] .site-management .site-card .site-name {
   color: #f1f5f9 !important;
 }
@@ -1577,18 +1665,60 @@ html.mobile-root, body.mobile-root, .mobile-root #app { width: 100%; height: 100
   color: #60a5fa !important;
 }
 
-[data-theme="dark"] .site-management .stat-item {
-  background: rgba(30, 41, 59, 0.8) !important;
-  border-color: #334155 !important;
+/* ========== 全局 stat-item 统计卡片深色适配 ========== */
+[data-theme="dark"] .stat-item {
+  border: 1px solid rgba(255, 255, 255, 0.06) !important;
 }
 
-[data-theme="dark"] .site-management .stat-number {
-  color: #e2e8f0 !important;
+[data-theme="dark"] .stat-item .stat-label {
+  color: #94a3b8 !important; /* 统一暗色文字 */
 }
 
-[data-theme="dark"] .site-management .stat-label {
-  color: #94a3b8 !important;
+/* 已配置站点 (蓝色) */
+[data-theme="dark"] .stat-config {
+  background: linear-gradient(135deg, rgba(59, 130, 246, 0.15) 0%, rgba(30, 41, 59, 0.9) 100%) !important;
 }
+[data-theme="dark"] .stat-config .stat-num,
+[data-theme="dark"] .stat-config .stat-number {
+  color: #60a5fa !important;
+}
+
+/* 已适配站点 (青色) */
+[data-theme="dark"] .stat-supporting {
+  background: linear-gradient(135deg, rgba(20, 184, 166, 0.15) 0%, rgba(30, 41, 59, 0.9) 100%) !important;
+}
+[data-theme="dark"] .stat-supporting .stat-num,
+[data-theme="dark"] .stat-supporting .stat-number {
+  color: #2dd4bf !important;
+}
+
+/* Cookie数 (橙色) */
+[data-theme="dark"] .stat-cookie {
+  background: linear-gradient(135deg, rgba(249, 115, 22, 0.15) 0%, rgba(30, 41, 59, 0.9) 100%) !important;
+}
+[data-theme="dark"] .stat-cookie .stat-num,
+[data-theme="dark"] .stat-cookie .stat-number {
+  color: #fb923c !important;
+}
+
+/* 待更新 (紫色) */
+[data-theme="dark"] .stat-pending {
+  background: linear-gradient(135deg, rgba(168, 85, 247, 0.15) 0%, rgba(30, 41, 59, 0.9) 100%) !important;
+}
+[data-theme="dark"] .stat-pending .stat-num,
+[data-theme="dark"] .stat-pending .stat-number {
+  color: #c084fc !important;
+}
+
+/* 筛选/过滤 (粉色/橙) */
+[data-theme="dark"] .stat-filtered {
+  background: linear-gradient(135deg, rgba(236, 72, 153, 0.15) 0%, rgba(30, 41, 59, 0.9) 100%) !important;
+}
+[data-theme="dark"] .stat-filtered .stat-num,
+[data-theme="dark"] .stat-filtered .stat-number {
+  color: #f472b6 !important;
+}
+
 
 [data-theme="dark"] .site-management .toolbar {
   background: #1e293b !important;
@@ -1636,6 +1766,17 @@ html.mobile-root, body.mobile-root, .mobile-root #app { width: 100%; height: 100
   color: #86efac !important;
 }
 
+[data-theme="dark"] .site-management .act-add {
+  background: rgba(129, 140, 248, 0.12) !important;
+  color: #818cf8 !important;
+  transition: all 0.2s ease !important;
+}
+
+[data-theme="dark"] .site-management .act-add:hover {
+  background: rgba(129, 140, 248, 0.24) !important;
+  color: #a5b4fc !important;
+}
+
 [data-theme="dark"] .site-management .act-more {
   background: #334155 !important;
   border-color: #475569 !important;
@@ -1665,7 +1806,9 @@ html.mobile-root, body.mobile-root, .mobile-root #app { width: 100%; height: 100
 }
 
 [data-theme="dark"] .totp-manager .totp-card,
-[data-theme="dark"] .pt-manager-root .pt-card {
+[data-theme="dark"] .totp-manager .totp-loading-card,
+[data-theme="dark"] .pt-manager-root .pt-card,
+[data-theme="dark"] .pt-manager-root .pt-loading-card {
   background: #1e293b !important;
   border-color: #334155 !important;
   color: #e2e8f0;
@@ -1725,6 +1868,8 @@ html.mobile-root, body.mobile-root, .mobile-root #app { width: 100%; height: 100
 }
 
 [data-theme="dark"] .download-card,
+[data-theme="dark"] .download-loading-state,
+[data-theme="dark"] .download-checking-state,
 [data-theme="dark"] .comprehensive-card,
 [data-theme="dark"] .plugin-root {
   background: #1e293b !important;
@@ -1816,22 +1961,23 @@ html.mobile-root, body.mobile-root, .mobile-root #app { width: 100%; height: 100
     radial-gradient(circle at top, rgba(59, 130, 246, 0.08), transparent 34%),
     #0f172a !important;
 }
-[data-theme="dark"] .pin-lock-card .pin-code-box {
+[data-theme="dark"] .pin-code-box {
   background: #0f172a !important;
   border-color: #334155 !important;
   color: #e2e8f0 !important;
   box-shadow: 0 1px 2px rgba(0, 0, 0, 0.2) !important;
 }
-[data-theme="dark"] .pin-lock-card .pin-code-box:focus {
+[data-theme="dark"] .pin-code-box:focus {
   border-color: #3b82f6 !important;
   background: #0f172a !important;
   box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.25) !important;
 }
-[data-theme="dark"] .pin-lock-card .pin-code-box:valid {
+[data-theme="dark"] .pin-code-box:valid {
   border-color: #60a5fa !important;
   background: #1e293b !important;
   box-shadow: none !important;
 }
+
 
 
 /* ========== Sites.vue dark theme overrides ========== */
@@ -1839,6 +1985,17 @@ html.mobile-root, body.mobile-root, .mobile-root #app { width: 100%; height: 100
   background: #1e293b !important;
   border-color: #334155 !important;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3) !important;
+}
+
+[data-theme="dark"] .sites-root .sites-loading-card {
+  background: #1e293b !important;
+  border-color: #334155 !important;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3) !important;
+}
+
+[data-theme="dark"] .sites-root .sites-loading-shimmer {
+  background: linear-gradient(90deg, #334155 25%, #475569 37%, #334155 63%) !important;
+  background-size: 400% 100% !important;
 }
 [data-theme="dark"] .sites-root .site-card:hover {
   box-shadow: 0 4px 16px rgba(0, 0, 0, 0.45) !important;
@@ -1959,10 +2116,25 @@ html.mobile-root, body.mobile-root, .mobile-root #app { width: 100%; height: 100
 [data-theme="dark"] .user-root .divider {
   background: #334155 !important;
 }
-[data-theme="dark"] .user-root .comprehensive-card {
+[data-theme="dark"] .user-root .comprehensive-card,
+[data-theme="dark"] .user-root .user-loading-card,
+[data-theme="dark"] .user-root .user-loading-info-card {
   background: #1e293b !important;
   border-color: #334155 !important;
   box-shadow: 0 6px 18px rgba(0, 0, 0, 0.3) !important;
+}
+[data-theme="dark"] .user-root .user-loading-divider {
+  background: #334155 !important;
+}
+[data-theme="dark"] .user-root .user-loading-sub-stat,
+[data-theme="dark"] .user-root .user-loading-stat {
+  background: #0f172a !important;
+  border-color: #334155 !important;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2) !important;
+}
+[data-theme="dark"] .user-root .user-loading-shimmer {
+  background: linear-gradient(90deg, #334155 25%, #475569 37%, #334155 63%) !important;
+  background-size: 400% 100% !important;
 }
 
 /* UserCard.vue 用户资料卡片深色适配 */
@@ -2091,6 +2263,21 @@ html.mobile-root, body.mobile-root, .mobile-root #app { width: 100%; height: 100
 /* ========== DownloadManager.vue 下载管理深色适配 ========== */
 [data-theme="dark"] .download-manager .action-bar {
   border-bottom-color: #334155 !important;
+}
+[data-theme="dark"] .download-manager .download-loading-title,
+[data-theme="dark"] .download-manager .download-checking-title {
+  color: #e2e8f0 !important;
+}
+[data-theme="dark"] .download-manager .download-loading-desc,
+[data-theme="dark"] .download-manager .download-checking-desc {
+  color: #94a3b8 !important;
+}
+[data-theme="dark"] .download-manager .download-loading-spinner {
+  border-color: rgba(74, 222, 128, 0.18) !important;
+  border-top-color: #4ade80 !important;
+}
+[data-theme="dark"] .download-manager .download-checking-indicator span {
+  background: #4ade80 !important;
 }
 [data-theme="dark"] .download-manager .download-item .title {
   color: #e2e8f0 !important;
@@ -2243,7 +2430,9 @@ html.mobile-root, body.mobile-root, .mobile-root #app { width: 100%; height: 100
 
 /* ========== PT凭据与两步验证卡片深度深色适配 ========== */
 [data-theme="dark"] .pt-card,
-[data-theme="dark"] .totp-card {
+[data-theme="dark"] .pt-loading-card,
+[data-theme="dark"] .totp-card,
+[data-theme="dark"] .totp-loading-card {
   background: #1e293b !important;
   border-color: #334155 !important;
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3) !important;
@@ -2277,14 +2466,24 @@ html.mobile-root, body.mobile-root, .mobile-root #app { width: 100%; height: 100
   color: #60a5fa !important;
 }
 [data-theme="dark"] .pt-card .card-actions,
-[data-theme="dark"] .totp-card .card-actions {
+[data-theme="dark"] .pt-loading-actions,
+[data-theme="dark"] .totp-card .card-actions,
+[data-theme="dark"] .totp-loading-actions {
   background: #0f172a !important;
   border: 1px solid #334155 !important;
 }
 [data-theme="dark"] .pt-card .action-btn,
 [data-theme="dark"] .totp-card .action-btn {
   color: #cbd5e1 !important;
-  border-radius: 4px !important;
+  border-radius: 0 !important;
+}
+[data-theme="dark"] .pt-card .card-actions .action-btn:first-child,
+[data-theme="dark"] .totp-card .card-actions .action-btn:first-child {
+  border-radius: 4px 0 0 4px !important;
+}
+[data-theme="dark"] .pt-card .card-actions .action-btn:last-child,
+[data-theme="dark"] .totp-card .card-actions .action-btn:last-child {
+  border-radius: 0 4px 4px 0 !important;
 }
 [data-theme="dark"] .pt-card .action-btn svg,
 [data-theme="dark"] .totp-card .action-btn svg {
@@ -2293,7 +2492,7 @@ html.mobile-root, body.mobile-root, .mobile-root #app { width: 100%; height: 100
 }
 [data-theme="dark"] .pt-card .action-btn:hover,
 [data-theme="dark"] .totp-card .action-btn:hover {
-  background: rgba(255, 255, 255, 0.08) !important;
+  background: rgba(255, 255, 255, 0.12) !important;
   color: #60a5fa !important;
 }
 [data-theme="dark"] .pt-card .action-btn:hover svg,
@@ -2302,8 +2501,15 @@ html.mobile-root, body.mobile-root, .mobile-root #app { width: 100%; height: 100
   color: #60a5fa !important;
 }
 [data-theme="dark"] .pt-card .card-password-row,
-[data-theme="dark"] .totp-card .card-code-row {
+[data-theme="dark"] .pt-loading-password-row,
+[data-theme="dark"] .totp-card .card-code-row,
+[data-theme="dark"] .totp-loading-code-row {
   border-top-color: #334155 !important;
+}
+[data-theme="dark"] .pt-loading-shimmer,
+[data-theme="dark"] .totp-loading-shimmer {
+  background: linear-gradient(90deg, #334155 25%, #475569 37%, #334155 63%) !important;
+  background-size: 400% 100% !important;
 }
 [data-theme="dark"] .pt-card .pw-wrap,
 [data-theme="dark"] .totp-card .code-wrap {
@@ -2432,6 +2638,11 @@ html.mobile-root, body.mobile-root, .mobile-root #app { width: 100%; height: 100
 [data-theme="dark"] .el-empty__description p {
   color: #64748b !important;
 }
+[data-theme="dark"] .el-empty__image svg {
+  filter: invert(0.9) hue-rotate(180deg) brightness(0.7) contrast(0.9) !important;
+  opacity: 0.65 !important;
+}
+
 
 /* ========== 全局 el-select 下拉框修补 ========== */
 [data-theme="dark"] .el-select-dropdown {
@@ -2482,6 +2693,64 @@ html.mobile-root, body.mobile-root, .mobile-root #app { width: 100%; height: 100
 
 [data-theme="dark"] .sites-root .action-btn.primary:hover .btn-icon {
   transform: rotate(360deg) !important;
+}
+
+/* ========== 全局 el-dropdown 菜单深色适配 ========== */
+[data-theme="dark"] .el-dropdown-menu {
+  background: #1e293b !important;
+  border-color: #334155 !important;
+}
+[data-theme="dark"] .el-dropdown-menu__item {
+  color: #cbd5e1 !important;
+}
+[data-theme="dark"] .el-dropdown-menu__item:hover,
+[data-theme="dark"] .el-dropdown-menu__item:focus,
+[data-theme="dark"] .el-dropdown-menu__item:not(.is-disabled):focus {
+  background-color: rgba(255, 255, 255, 0.08) !important;
+  color: #60a5fa !important;
+}
+[data-theme="dark"] .el-dropdown-menu__item.is-disabled {
+  color: #475569 !important;
+  background-color: transparent !important;
+}
+[data-theme="dark"] .el-dropdown-menu__item--divided {
+  border-top-color: #334155 !important;
+}
+[data-theme="dark"] .el-dropdown-menu__item--divided::before {
+  background-color: #334155 !important;
+}
+
+/* ========== 全局 PIN 验证频率卡片深色适配 ========== */
+[data-theme="dark"] .frequency-block {
+  border-top-color: #334155 !important;
+}
+[data-theme="dark"] .frequency-option {
+  background: #1e293b !important;
+  border-color: #334155 !important;
+}
+[data-theme="dark"] .frequency-option:hover {
+  background: rgba(255, 255, 255, 0.04) !important;
+  border-color: #475569 !important;
+}
+[data-theme="dark"] .frequency-option.is-checked {
+  background: rgba(59, 130, 246, 0.15) !important;
+  border-color: rgba(59, 130, 246, 0.45) !important;
+}
+[data-theme="dark"] .frequency-option .frequency-title {
+  color: #e2e8f0 !important;
+}
+[data-theme="dark"] .frequency-option.is-checked .frequency-title {
+  color: #60a5fa !important;
+}
+[data-theme="dark"] .frequency-option .frequency-desc {
+  color: #94a3b8 !important;
+}
+
+/* ========== 全局弹窗提示框 (dialog-tip) 深色适配 ========== */
+[data-theme="dark"] .dialog-tip {
+  background: rgba(245, 158, 11, 0.1) !important;
+  border-color: rgba(245, 158, 11, 0.25) !important;
+  color: #fb923c !important;
 }
 </style>
 
