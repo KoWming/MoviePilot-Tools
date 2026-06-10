@@ -74,6 +74,11 @@ function findChromeExecutable() {
   const candidates = [
     process.env.CHROME_PATH,
     process.env.GOOGLE_CHROME_BIN,
+    '/usr/bin/google-chrome',
+    '/usr/bin/chromium-browser',
+    '/usr/bin/chromium',
+    '/usr/bin/microsoft-edge-stable',
+    '/usr/bin/microsoft-edge',
     'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe',
     'C:\\Program Files (x86)\\Google\\Chrome\\Application\\chrome.exe',
     path.join(process.env.LOCALAPPDATA || '', 'Google\\Chrome\\Application\\chrome.exe'),
@@ -87,7 +92,7 @@ function findChromeExecutable() {
 function createCrx(crxPath) {
   const chromePath = findChromeExecutable();
   if (!chromePath) {
-    throw new Error('未找到 Chrome/Edge 浏览器，无法生成 crx 安装文件。可设置 CHROME_PATH 指向 chrome.exe。');
+    throw new Error('未找到 Chrome/Edge 浏览器，无法生成 crx 安装文件。可设置 CHROME_PATH 环境变量指向浏览器路径。');
   }
 
   const generatedCrxPath = `${distDir}.crx`;
