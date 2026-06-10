@@ -2,8 +2,8 @@ name: 构建与发布
 
 on:
   push:
-    tags:
-      - 'v*'
+    branches:
+      - main
     paths:
       - 'version.json'
   workflow_dispatch:
@@ -14,7 +14,7 @@ permissions:
 jobs:
   build:
     name: 构建并发布浏览器扩展
-    runs-on: windows-latest
+    runs-on: ubuntu-latest
 
     steps:
       - name: 拉取仓库代码
@@ -30,17 +30,16 @@ jobs:
         run: npm ci
 
       - name: 创建发布目录并还原私钥
-        shell: pwsh
         env:
           CRX_PRIVATE_KEY: ${{ secrets.CRX_PRIVATE_KEY }}
         run: |
-          New-Item -ItemType Directory -Force -Path release
-          if ($env:CRX_PRIVATE_KEY) {
-            Set-Content -Path release/moviepilot-tools.pem -Value $env:CRX_PRIVATE_KEY -NoNewline
-            Write-Host "Private key restored from secrets."
-          } else {
-            Write-Host "No CRX_PRIVATE_KEY secret found. A new key will be auto-generated for CRX packaging."
-          }
+          mkdir -p release
+          if [ -n "$CRX_PRIVATE_KEY" ]; then
+            echo -n "$CRX_PRIVATE_KEY" > release/moviepilot-tools.pem
+            echo "Private key restored from secrets."
+          else
+            echo "No CRX_PRIVATE_KEY secret found. A new key will be auto-generated for CRX packaging."
+          fi
 
       - name: 构建并打包扩展程序
         run: npm run build
@@ -55,38 +54,32 @@ jobs:
 
       - name: 生成版本更新说明
         id: release_notes
-        shell: pwsh
         run: |
-          # Read version and history from version.json
-          $versionInfo = Get-Content -Raw -Path version.json | ConvertFrom-Json
-          $version = $versionInfo.version
-          Write-Host "Detected version from version.json: $version"
-          echo "version=$version" >> $env:GITHUB_OUTPUT
+          # 读取版本信息
+          version=$(jq -r '.version' version.json)
+          echo "Detected version from version.json: $version"
+          echo "version=$version" >> $GITHUB_OUTPUT
           
-          $notes = ""
-          if ($versionInfo.history) {
-            if ($versionInfo.history.PSObject.Properties["v$version"]) {
-              $notes = $versionInfo.history."v$version"
-            } elseif ($versionInfo.history.PSObject.Properties[$version]) {
-              $notes = $versionInfo.history.$version
-            }
-          }
+          # 提取对应版本的更新说明（数组则逐行输出，字符串则直接输出）
+          notes=$(jq -r --arg v "$version" '
+            (.history["v"+$v] // .history[$v] // empty)
+            | if type == "array" then .[] else . end
+          ' version.json)
           
-          if (-not $notes) {
-            $notes = "Release version $version"
-          }
+          if [ -z "$notes" ]; then
+            notes="Release version $version"
+          fi
           
-          # Write to release_notes.md
-          Set-Content -Path release_notes.md -Value $notes -Encoding utf8
-          Write-Host "Generated release notes:"
-          Write-Host $notes
+          # 写入发布说明文件
+          echo "$notes" > release_notes.md
+          echo "Generated release notes:"
+          echo "$notes"
 
       - name: 创建 GitHub Release 发布版本
-        if: startsWith(github.ref, 'refs/tags/v') || github.event_name == 'workflow_dispatch' || github.event_name == 'push'
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: ${{ startsWith(github.ref, 'refs/tags/v') && github.ref_name || format('v{0}', steps.release_notes.outputs.version) }}
-          name: MoviePilot Tools ${{ startsWith(github.ref, 'refs/tags/v') && github.ref_name || format('v{0}', steps.release_notes.outputs.version) }}
+          tag_name: v${{ steps.release_notes.outputs.version }}
+          name: MoviePilot Tools v${{ steps.release_notes.outputs.version }}
           body_path: release_notes.md
           files: |
             release/*.zip
