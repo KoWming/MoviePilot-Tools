@@ -125,36 +125,32 @@ jobs:
           fi
           echo "上传文件: $ZIP_FILE"
 
-          RESPONSE=$(curl -s -w "\n%{http_code}" \
+          curl -s -D /tmp/upload_headers.txt -o /tmp/upload_body.txt \
             -H "Authorization: ApiKey $EDGE_API_KEY" \
             -H "X-ClientID: $EDGE_CLIENT_ID" \
             -H "Content-Type: application/zip" \
             -X POST \
             -T "$ZIP_FILE" \
-            "$API_ENDPOINT/v1/products/$EDGE_PRODUCT_ID/submissions/draft/package")
+            "$API_ENDPOINT/v1/products/$EDGE_PRODUCT_ID/submissions/draft/package"
 
-          HTTP_CODE=$(echo "$RESPONSE" | tail -1)
-          BODY=$(echo "$RESPONSE" | sed '$d')
+          HTTP_CODE=$(head -1 /tmp/upload_headers.txt | awk '{print $2}' | tr -d '\r')
+          echo "HTTP 状态码: $HTTP_CODE"
 
-          if [ "$HTTP_CODE" -eq 202 ]; then
-            # 从 Location header 提取 operationID
-            OPERATION_ID=$(curl -s -D - \
-              -H "Authorization: ApiKey $EDGE_API_KEY" \
-              -H "X-ClientID: $EDGE_CLIENT_ID" \
-              -H "Content-Type: application/zip" \
-              -X POST \
-              -T "$ZIP_FILE" \
-              "$API_ENDPOINT/v1/products/$EDGE_PRODUCT_ID/submissions/draft/package" \
-              | grep -i "^Location:" | sed 's/.*operations\///' | tr -d '\r\n')
+          if [ "$HTTP_CODE" = "202" ]; then
+            OPERATION_ID=$(grep -i "^Location:" /tmp/upload_headers.txt \
+              | sed 's|.*operations/||' \
+              | tr -d '\r\n[:space:]')
 
             if [ -z "$OPERATION_ID" ]; then
               echo "::error::上传成功但未获取到 operationID"
+              cat /tmp/upload_headers.txt
               exit 1
             fi
             echo "operation_id=$OPERATION_ID" >> $GITHUB_OUTPUT
             echo "上传已接受，operationID: $OPERATION_ID"
           else
-            echo "::error::上传失败 HTTP $HTTP_CODE: $BODY"
+            echo "::error::上传失败 HTTP $HTTP_CODE"
+            cat /tmp/upload_body.txt
             exit 1
           fi
 
@@ -193,22 +189,25 @@ jobs:
         run: |
           VERSION=$(jq -r '.version' version.json 2>/dev/null || echo "unknown")
 
-          PUBLISH_RESPONSE=$(curl -s -D /tmp/publish_headers.txt \
+          curl -s -D /tmp/publish_headers.txt -o /tmp/publish_body.txt \
             -H "Authorization: ApiKey $EDGE_API_KEY" \
             -H "X-ClientID: $EDGE_CLIENT_ID" \
             -H "Content-Type: application/json" \
             -X POST \
             -d "{\"notes\": \"Auto-publish v$VERSION via GitHub Actions\"}" \
-            "$API_ENDPOINT/v1/products/$EDGE_PRODUCT_ID/submissions")
+            "$API_ENDPOINT/v1/products/$EDGE_PRODUCT_ID/submissions"
 
-          HTTP_CODE=$(grep HTTP /tmp/publish_headers.txt | awk '{print $2}')
+          HTTP_CODE=$(head -1 /tmp/publish_headers.txt | awk '{print $2}' | tr -d '\r')
 
-          if [ "$HTTP_CODE" -eq 202 ]; then
-            OPERATION_ID=$(grep -i "^Location:" /tmp/publish_headers.txt | sed 's/.*operations\///' | tr -d '\r\n')
+          if [ "$HTTP_CODE" = "202" ]; then
+            OPERATION_ID=$(grep -i "^Location:" /tmp/publish_headers.txt \
+              | sed 's|.*operations/||' \
+              | tr -d '\r\n[:space:]')
             echo "publish_op_id=$OPERATION_ID" >> $GITHUB_OUTPUT
             echo "发布已提交，operationID: $OPERATION_ID"
           else
-            echo "::error::提交发布失败 HTTP $HTTP_CODE: $PUBLISH_RESPONSE"
+            echo "::error::提交发布失败 HTTP $HTTP_CODE"
+            cat /tmp/publish_body.txt
             exit 1
           fi
 
