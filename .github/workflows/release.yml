@@ -118,9 +118,11 @@ jobs:
       - name: 上传扩展包至 Edge Add-ons
         id: upload
         run: |
-          ZIP_FILE=$(ls release/*.zip | head -1)
+          # 排除 -crx.zip（Chrome 专用包），选择标准 .zip
+          ZIP_FILE=$(ls release/*.zip 2>/dev/null | grep -v '\-crx\.zip$' | head -1)
           if [ -z "$ZIP_FILE" ]; then
-            echo "::error::未找到 .zip 包"
+            echo "::error::未找到 .zip 包（排除 -crx.zip）"
+            ls release/
             exit 1
           fi
           echo "上传文件: $ZIP_FILE"
@@ -133,7 +135,8 @@ jobs:
             -T "$ZIP_FILE" \
             "$API_ENDPOINT/v1/products/$EDGE_PRODUCT_ID/submissions/draft/package"
 
-          HTTP_CODE=$(head -1 /tmp/upload_headers.txt | awk '{print $2}' | tr -d '\r')
+          # 取最后一个 HTTP 状态行（跳过 100 Continue）
+          HTTP_CODE=$(grep '^HTTP/' /tmp/upload_headers.txt | tail -1 | awk '{print $2}' | tr -d '\r')
           echo "HTTP 状态码: $HTTP_CODE"
 
           if [ "$HTTP_CODE" = "202" ]; then
@@ -197,7 +200,8 @@ jobs:
             -d "{\"notes\": \"Auto-publish v$VERSION via GitHub Actions\"}" \
             "$API_ENDPOINT/v1/products/$EDGE_PRODUCT_ID/submissions"
 
-          HTTP_CODE=$(head -1 /tmp/publish_headers.txt | awk '{print $2}' | tr -d '\r')
+          # 取最后一个 HTTP 状态行（跳过 100 Continue）
+          HTTP_CODE=$(grep '^HTTP/' /tmp/publish_headers.txt | tail -1 | awk '{print $2}' | tr -d '\r')
 
           if [ "$HTTP_CODE" = "202" ]; then
             OPERATION_ID=$(grep -i "^Location:" /tmp/publish_headers.txt \
