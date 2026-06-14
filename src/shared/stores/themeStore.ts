@@ -88,5 +88,9 @@ export function setTheme(mode: ThemeMode): void {
   try {
     localStorage.setItem(STORAGE_KEY, mode);
   } catch {}
+  // 同步到 chrome.storage.local，供内容脚本读取
+  try {
+    chrome.storage.local.set({ [STORAGE_KEY]: mode });
+  } catch {}
   computeEffective();
 }

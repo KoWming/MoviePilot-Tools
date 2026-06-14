@@ -121,7 +121,9 @@
 // ============================================================
 
 import { reactive, ref, onMounted, onUnmounted, computed, nextTick, watch } from 'vue';
-import { loginByPassword } from '../shared/api/auth';
+import { loginByPassword, getBaseUrl, getToken } from '../shared/api/auth';
+import { createMpApiClient } from '../shared/api/client';
+import { downloadAndCompressImage, saveCustomBgImage } from '../shared/customBg';
 import { mdiLink, mdiAccount, mdiLockOutline, mdiChartLine, mdiWeb, mdiShieldKey, mdiPuzzleOutline, mdiDownload, mdiInformationOutline, mdiCogOutline, mdiKeyOutline } from '@mdi/js';
 import { ElMessage } from 'element-plus';
 import User from './views/User.vue';
@@ -212,6 +214,41 @@ onMounted(async () => {
   if (token.value) {
     view.value = 'site-management';
     pinLocked.value = await shouldLockWithPin();
+  }
+  // 每日壁纸自动获取：每次打开 popup 时检查，无需先打开设置页
+  try {
+    const wpData = await chrome.storage.local.get(['dailyWallpaperEnabled', 'lastDailyWallpaperDate']);
+    if (wpData.dailyWallpaperEnabled) {
+      const today = new Date().toISOString().slice(0, 10);
+      const lastDate = wpData.lastDailyWallpaperDate || '';
+      if (lastDate !== today) {
+        const baseUrl = await getBaseUrl();
+        const tkn = await getToken();
+        if (baseUrl && tkn) {
+          const client = createMpApiClient({ baseURL: baseUrl, getToken });
+          const resp = await client.get('/api/v1/login/wallpaper');
+          const data = resp.data;
+          let wallpaperUrl = '';
+          if (data?.message && typeof data.message === 'string') {
+            wallpaperUrl = data.message;
+          } else if (data?.data && typeof data.data === 'string') {
+            wallpaperUrl = data.data;
+          } else if (typeof data === 'string') {
+            wallpaperUrl = data;
+          }
+          if (wallpaperUrl) {
+            const base64 = await downloadAndCompressImage(wallpaperUrl);
+            await saveCustomBgImage(base64);
+            await chrome.storage.local.set({ [STORAGE_KEYS.CUSTOM_BG_CONFIG]: { ...bgStore, url: wallpaperUrl } });
+            bgStore.url = wallpaperUrl;
+            bgStore.image = base64;
+            await chrome.storage.local.set({ lastDailyWallpaperDate: today });
+          }
+        }
+      }
+    }
+  } catch (e) {
+    console.warn('每日壁纸自动获取失败:', e);
   }
   // 监听后台导航事件（通过 storage 传递，稳定可靠）
   try {
@@ -552,6 +589,7 @@ html.has-custom-bg-body, body.has-custom-bg-body, .has-custom-bg-body #app {
 .popup-root.has-custom-bg .settings-card,
 .popup-root.has-custom-bg .card,
 .popup-root.has-custom-bg .pt-card,
+.popup-root.has-custom-bg .bl-card,
 .popup-root.has-custom-bg .pt-loading-card,
 .popup-root.has-custom-bg .totp-card,
 .popup-root.has-custom-bg .totp-loading-card,
@@ -757,10 +795,8 @@ html.has-custom-bg-body, body.has-custom-bg-body, .has-custom-bg-body #app {
 
 /* Glassmorphism overrides for switches */
 .popup-root.has-custom-bg .el-switch__core {
-  background-color: rgba(255, 255, 255, 0.25) !important;
-  border-color: rgba(255, 255, 255, 0.2) !important;
-  backdrop-filter: blur(4px) !important;
-  -webkit-backdrop-filter: blur(4px) !important;
+  background-color: rgba(0, 0, 0, 0.15) !important;
+  border-color: rgba(0, 0, 0, 0.1) !important;
 }
 .popup-root.has-custom-bg .el-switch.is-checked .el-switch__core {
   background-color: var(--el-switch-on-color, var(--el-color-primary)) !important;
@@ -804,6 +840,14 @@ html.has-custom-bg-body, body.has-custom-bg-body, .has-custom-bg-body #app {
   -webkit-backdrop-filter: blur(20px) !important;
   border: 1px solid rgba(255, 255, 255, 0.3) !important;
   box-shadow: 0 12px 32px rgba(0, 0, 0, 0.15) !important;
+}
+
+/* 毛玻璃效果：黑名单屏蔽规则卡片 */
+.popup-root.has-custom-bg .bl-switch-item {
+  background: rgba(255, 255, 255, 0.35) !important;
+  backdrop-filter: blur(8px) !important;
+  -webkit-backdrop-filter: blur(8px) !important;
+  border: 1px solid rgba(255, 255, 255, 0.25) !important;
 }
 
 /* Glassmorphism overrides for PIN inputs */
@@ -931,11 +975,29 @@ html.has-custom-bg-body, body.has-custom-bg-body, .has-custom-bg-body #app {
 
 /* Legibility overrides for PT Card text under custom background */
 .popup-root.has-custom-bg .pt-card .password-label,
-.popup-root.has-custom-bg .pt-card .time-wrap {
+.popup-root.has-custom-bg .bl-card .bl-tags,
+.popup-root.has-custom-bg .pt-card .time-wrap,
+.popup-root.has-custom-bg .bl-card .time-wrap {
   color: #475569 !important;
 }
 .popup-root.has-custom-bg .pt-card .password-value {
   color: #0f172a !important;
+}
+
+/* 毛玻璃效果：黑名单屏蔽规则标签 */
+.popup-root.has-custom-bg .bl-card .bl-tag.el-tag--warning {
+  background: rgba(245, 158, 11, 0.08) !important;
+  backdrop-filter: blur(6px) !important;
+  -webkit-backdrop-filter: blur(6px) !important;
+  border-color: rgba(245, 158, 11, 0.12) !important;
+  color: #b45309 !important;
+}
+.popup-root.has-custom-bg .bl-card .bl-tag.el-tag--danger {
+  background: rgba(239, 68, 68, 0.08) !important;
+  backdrop-filter: blur(6px) !important;
+  -webkit-backdrop-filter: blur(6px) !important;
+  border-color: rgba(239, 68, 68, 0.12) !important;
+  color: #dc2626 !important;
 }
 .popup-root.has-custom-bg .pt-card .dots {
   color: #475569 !important;
@@ -1626,6 +1688,18 @@ html.mobile-root, body.mobile-root, .mobile-root #app { width: 100%; height: 100
 
 [data-theme="dark"] .el-dialog__body {
   color: #e2e8f0 !important;
+}
+
+/* 深色主题：黑名单屏蔽规则卡片 */
+[data-theme="dark"] .bl-switch-item {
+  background: #0f172a !important;
+  border-color: #334155 !important;
+}
+[data-theme="dark"] .bl-switch-label span {
+  color: #e2e8f0 !important;
+}
+[data-theme="dark"] .bl-switch-icon {
+  fill: #94a3b8 !important;
 }
 
 [data-theme="dark"] .el-alert {
@@ -2430,6 +2504,7 @@ html.mobile-root, body.mobile-root, .mobile-root #app { width: 100%; height: 100
 
 /* ========== PT凭据与两步验证卡片深度深色适配 ========== */
 [data-theme="dark"] .pt-card,
+[data-theme="dark"] .bl-card,
 [data-theme="dark"] .pt-loading-card,
 [data-theme="dark"] .totp-card,
 [data-theme="dark"] .totp-loading-card {
@@ -2438,24 +2513,29 @@ html.mobile-root, body.mobile-root, .mobile-root #app { width: 100%; height: 100
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3) !important;
 }
 [data-theme="dark"] .pt-card:hover,
+[data-theme="dark"] .bl-card:hover,
 [data-theme="dark"] .totp-card:hover {
   border-color: rgba(96, 165, 250, 0.4) !important;
   box-shadow: 0 4px 16px rgba(96, 165, 250, 0.08) !important;
   transform: translateY(-1px) !important;
 }
 [data-theme="dark"] .pt-card .site-name,
+[data-theme="dark"] .bl-card .site-name,
 [data-theme="dark"] .totp-card .site-name {
   color: #f1f5f9 !important;
 }
 [data-theme="dark"] .pt-card .site-domain,
+[data-theme="dark"] .bl-card .site-domain,
 [data-theme="dark"] .totp-card .site-domain {
   color: #94a3b8 !important;
 }
 [data-theme="dark"] .pt-card .site-domain.link-style,
+[data-theme="dark"] .bl-card .site-domain.link-style,
 [data-theme="dark"] .totp-card .site-domain.link-style {
   color: #60a5fa !important;
 }
 [data-theme="dark"] .pt-card .site-domain.link-style:hover,
+[data-theme="dark"] .bl-card .site-domain.link-style:hover,
 [data-theme="dark"] .totp-card .site-domain.link-style:hover {
   color: #93c5fd !important;
 }
@@ -2466,6 +2546,7 @@ html.mobile-root, body.mobile-root, .mobile-root #app { width: 100%; height: 100
   color: #60a5fa !important;
 }
 [data-theme="dark"] .pt-card .card-actions,
+[data-theme="dark"] .bl-card .card-actions,
 [data-theme="dark"] .pt-loading-actions,
 [data-theme="dark"] .totp-card .card-actions,
 [data-theme="dark"] .totp-loading-actions {
@@ -2473,6 +2554,7 @@ html.mobile-root, body.mobile-root, .mobile-root #app { width: 100%; height: 100
   border: 1px solid #334155 !important;
 }
 [data-theme="dark"] .pt-card .action-btn,
+[data-theme="dark"] .bl-card .action-btn,
 [data-theme="dark"] .totp-card .action-btn {
   color: #cbd5e1 !important;
   border-radius: 0 !important;
@@ -2486,21 +2568,25 @@ html.mobile-root, body.mobile-root, .mobile-root #app { width: 100%; height: 100
   border-radius: 0 4px 4px 0 !important;
 }
 [data-theme="dark"] .pt-card .action-btn svg,
+[data-theme="dark"] .bl-card .action-btn svg,
 [data-theme="dark"] .totp-card .action-btn svg {
   fill: currentColor !important;
   color: #cbd5e1 !important;
 }
 [data-theme="dark"] .pt-card .action-btn:hover,
+[data-theme="dark"] .bl-card .action-btn:hover,
 [data-theme="dark"] .totp-card .action-btn:hover {
   background: rgba(255, 255, 255, 0.12) !important;
   color: #60a5fa !important;
 }
 [data-theme="dark"] .pt-card .action-btn:hover svg,
+[data-theme="dark"] .bl-card .action-btn:hover svg,
 [data-theme="dark"] .totp-card .action-btn:hover svg {
   fill: currentColor !important;
   color: #60a5fa !important;
 }
 [data-theme="dark"] .pt-card .card-password-row,
+[data-theme="dark"] .bl-card .bl-info-row,
 [data-theme="dark"] .pt-loading-password-row,
 [data-theme="dark"] .totp-card .card-code-row,
 [data-theme="dark"] .totp-loading-code-row {
@@ -2529,8 +2615,25 @@ html.mobile-root, body.mobile-root, .mobile-root #app { width: 100%; height: 100
 [data-theme="dark"] .totp-card .code-value:hover {
   color: #93c5fd !important;
 }
-[data-theme="dark"] .pt-card .time-wrap {
+[data-theme="dark"] .pt-card .time-wrap,
+[data-theme="dark"] .bl-card .time-wrap {
   color: #64748b !important;
+}
+[data-theme="dark"] .bl-card .bl-info-row {
+  border-top-color: #334155 !important;
+}
+[data-theme="dark"] .bl-card .bl-tag.el-tag--warning {
+  background: rgba(245, 158, 11, 0.15) !important;
+  border-color: rgba(245, 158, 11, 0.3) !important;
+  color: #fbbf24 !important;
+}
+[data-theme="dark"] .bl-card .bl-tag.el-tag--danger {
+  background: rgba(239, 68, 68, 0.15) !important;
+  border-color: rgba(239, 68, 68, 0.3) !important;
+  color: #f87171 !important;
+}
+[data-theme="dark"] .bl-card .bl-tag-icon {
+  fill: currentColor !important;
 }
 [data-theme="dark"] .totp-card .timer-bg {
   stroke: #334155 !important;

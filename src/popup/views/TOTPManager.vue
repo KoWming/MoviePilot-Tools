@@ -32,7 +32,7 @@
           </template>
         </el-dropdown>
 
-        <el-button class="compact add-button" size="small" type="primary" @click="showAddDialog = true" title="添加站点">
+        <el-button class="compact add-button" size="small" type="primary" @click="openAddDialog" :title="currentTab === 'custom' ? '添加自定义站点' : '添加PT站点'">
           <svg viewBox="0 0 24 24" width="16" height="16" class="icon-btn-only">
             <path :d="mdiPlus"/>
           </svg>
@@ -123,7 +123,7 @@
           <path :d="mdiShieldKey"/>
         </svg>
         <p class="empty-text">暂无两步验证站点</p>
-        <el-button type="primary" @click="showAddDialog = true">添加第一个站点</el-button>
+        <el-button type="primary" @click="openAddDialog">{{ currentTab === 'custom' ? '添加自定义站点' : '添加PT站点' }}</el-button>
       </div>
       
       <div v-else class="totp-cards">
@@ -231,7 +231,7 @@
     <!-- 添加/编辑站点对话框 -->
     <el-dialog 
       v-model="showAddDialog" 
-      :title="editingSite ? '编辑站点' : '添加站点'"
+      :title="editingSite ? '编辑站点' : (siteForm.category === 'custom' ? '添加自定义站点' : '添加PT站点')"
       width="95%"
       :close-on-click-modal="false"
     >
@@ -872,11 +872,18 @@ const saveSite = async () => {
 const cancelEdit = () => {
   showAddDialog.value = false;
   editingSite.value = null;
-  siteForm.value = { name: '', url: '', secret: '', category: 'pt' };
+  siteForm.value = { name: '', url: '', secret: '', category: currentTab.value === 'custom' ? 'custom' : 'pt' };
   qrPreview.value = '';
   if (siteFormRef.value) {
     siteFormRef.value.resetFields();
   }
+};
+
+const openAddDialog = () => {
+  editingSite.value = null;
+  siteForm.value = { name: '', url: '', secret: '', category: currentTab.value === 'custom' ? 'custom' : 'pt' };
+  qrPreview.value = '';
+  showAddDialog.value = true;
 };
 
 // ==================== 导入导出 ====================

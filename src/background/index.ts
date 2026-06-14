@@ -18,6 +18,7 @@ import { recognizeCaptchaOffline } from './localOcr';
 import { TOTPStorageService } from '../shared/services/totpStorage';
 import { decryptApiToken, encryptApiToken } from '../shared/secureStorage';
 import { PTCredentialStorageService } from '../shared/services/credentialStorage';
+import { SiteBlacklistService } from '../shared/services/siteBlacklist';
 
 // ===== 安全模块：调试日志开关（生产环境关闭） =====
 const DEBUG = false;
@@ -1260,6 +1261,38 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
           }
         }
         await PTCredentialStorageService.addOrUpdateCredential(domain, username, password, name);
+        sendResponse({ success: true });
+      } catch (err) {
+        sendResponse({ success: false, error: (err as Error).message });
+      }
+    })();
+    return true;
+  }
+  if (msg?.type === 'MP_PT_ADD_BLACKLIST') {
+    const domain = msg?.domain as string | undefined;
+    if (!domain) {
+      sendResponse({ success: false, error: '参数缺失' });
+      return true;
+    }
+    (async () => {
+      try {
+        let name = '';
+        try {
+          const client = await createClient();
+          const resp = await client.get('/api/v1/site/mapping');
+          const mappingData = resp?.data?.data || {};
+          const cleanDomain = domain.toLowerCase().trim();
+          if (mappingData[cleanDomain]) {
+            name = mappingData[cleanDomain];
+          } else {
+            const noWww = cleanDomain.replace(/^www\./i, '');
+            const matchedKey = Object.keys(mappingData).find(k => k.toLowerCase().replace(/^www\./i, '') === noWww);
+            if (matchedKey) {
+              name = mappingData[matchedKey];
+            }
+          }
+        } catch {}
+        await SiteBlacklistService.addOrUpdate(domain, name, true, true);
         sendResponse({ success: true });
       } catch (err) {
         sendResponse({ success: false, error: (err as Error).message });

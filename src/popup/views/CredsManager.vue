@@ -17,7 +17,7 @@
           </template>
         </el-input>
 
-        <el-button class="compact add-button" size="small" type="primary" @click="showPtAddEditDialog('add')" title="新增账号">
+        <el-button class="compact add-button" size="small" type="primary" @click="currentTab === 'blacklist' ? showBlacklistDialog('add') : showPtAddEditDialog('add', undefined, currentTab)" :title="currentTab === 'blacklist' ? '添加黑名单站点' : currentTab === 'custom' ? '添加自定义站点' : '新增站点凭据'">
           <svg viewBox="0 0 24 24" width="16" height="16" class="icon-btn-only">
             <path :d="mdiPlus"/>
           </svg>
@@ -56,6 +56,16 @@
                   <svg viewBox="0 0 24 24" width="14" height="14" class="mr-1"><path :d="mdiImport"/></svg>导入本地 JSON
                 </div>
               </el-dropdown-item>
+              <el-dropdown-item command="bl-json-export" divided>
+                <div class="dropdown-item-content">
+                  <svg viewBox="0 0 24 24" width="14" height="14" class="mr-1"><path :d="mdiShieldOffOutline"/></svg>导出黑名单 JSON
+                </div>
+              </el-dropdown-item>
+              <el-dropdown-item command="bl-json-import">
+                <div class="dropdown-item-content">
+                  <svg viewBox="0 0 24 24" width="14" height="14" class="mr-1"><path :d="mdiShieldOffOutline"/></svg>导入黑名单 JSON
+                </div>
+              </el-dropdown-item>
             </el-dropdown-menu>
           </template>
         </el-dropdown>
@@ -68,6 +78,13 @@
       style="display: none"
       accept=".json"
       @change="onPtFileSelected"
+    />
+    <input
+      type="file"
+      ref="blFileInput"
+      style="display: none"
+      accept=".json"
+      @change="onBlFileSelected"
     />
 
     <!-- Tab Horizontal Layout -->
@@ -86,10 +103,17 @@
       >
         自定义
       </div>
+      <div 
+        class="pt-tab-item" 
+        :class="{ active: currentTab === 'blacklist' }" 
+        @click="currentTab = 'blacklist'"
+      >
+        黑名单
+      </div>
     </div>
 
     <!-- Main List Grid -->
-    <div class="pt-grid">
+    <div v-if="currentTab !== 'blacklist'" class="pt-grid">
       <div v-if="ptManagerLoading && ptCredsList.length === 0" class="pt-loading-cards">
         <div v-for="item in 3" :key="item" class="pt-loading-card">
           <div class="pt-loading-main">
@@ -183,6 +207,11 @@
                         {{ getCredCategory(item) === 'pt' ? '移动到自定义' : '移动到PT站点' }}
                       </div>
                     </el-dropdown-item>
+                    <el-dropdown-item command="add-to-blacklist">
+                      <div class="dropdown-item-content">
+                        <svg viewBox="0 0 24 24" width="14" height="14" class="mr-1"><path :d="mdiShieldOffOutline"/></svg>加入黑名单
+                      </div>
+                    </el-dropdown-item>
                     <el-dropdown-item command="delete" class="delete-menu-item">
                       <div class="dropdown-item-content text-danger">
                         <svg viewBox="0 0 24 24" width="14" height="14" class="mr-1"><path :d="mdiDelete"/></svg>删除凭据
@@ -211,10 +240,127 @@
       </div>
     </div>
 
+    <!-- 黑名单列表 -->
+    <div v-if="currentTab === 'blacklist'" class="pt-grid">
+      <div v-if="blacklistLoading && blacklistEntries.length === 0" class="pt-loading-cards">
+        <div v-for="item in 3" :key="item" class="pt-loading-card">
+          <div class="pt-loading-main">
+            <div class="pt-loading-avatar pt-loading-shimmer"></div>
+            <div class="pt-loading-info">
+              <div class="pt-loading-line name pt-loading-shimmer"></div>
+              <div class="pt-loading-line domain pt-loading-shimmer"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div v-else-if="filteredBlacklist.length === 0" class="empty-state">
+        <svg viewBox="0 0 24 24" width="48" height="48" class="empty-icon">
+          <path :d="mdiShieldOffOutline"/>
+        </svg>
+        <p class="empty-text">暂无黑名单站点</p>
+        <el-button type="primary" @click="showBlacklistDialog('add')">添加站点</el-button>
+      </div>
+
+      <div v-else class="pt-cards">
+        <div v-for="item in filteredBlacklist" :key="item.id" class="bl-card">
+          <div class="card-main">
+            <div class="site-avatar" :style="{ background: getLocalSiteIcon(item.domain) ? 'transparent' : getAvatarBg(item.domain) }">
+              <img v-if="getLocalSiteIcon(item.domain)" :src="getLocalSiteIcon(item.domain) || undefined" class="site-icon-img" />
+              <span v-else>{{ getAvatarChar(item.name || siteMapping[item.domain] || item.domain) }}</span>
+            </div>
+            <div class="site-details">
+              <div class="site-name" :title="item.name || siteMapping[item.domain] || item.domain">
+                {{ item.name || siteMapping[item.domain] || item.domain }}
+              </div>
+              <div class="site-domain link-style" :title="item.domain" @click="openSite(item.domain)">
+                {{ item.domain }}
+              </div>
+            </div>
+            <div class="card-actions">
+              <el-dropdown @command="(cmd: any) => handleBlacklistCommand(cmd, item)" trigger="click">
+                <el-button size="small" text class="action-btn">
+                  <svg viewBox="0 0 24 24" width="15" height="15"><path :d="mdiDotsVertical"/></svg>
+                </el-button>
+                <template #dropdown>
+                  <el-dropdown-menu>
+                    <el-dropdown-item command="edit">
+                      <div class="dropdown-item-content">
+                        <svg viewBox="0 0 24 24" width="14" height="14" class="mr-1"><path :d="mdiPencil"/></svg>编辑规则
+                      </div>
+                    </el-dropdown-item>
+                    <el-dropdown-item command="delete" class="delete-menu-item">
+                      <div class="dropdown-item-content text-danger">
+                        <svg viewBox="0 0 24 24" width="14" height="14" class="mr-1"><path :d="mdiDelete"/></svg>移除黑名单
+                      </div>
+                    </el-dropdown-item>
+                  </el-dropdown-menu>
+                </template>
+              </el-dropdown>
+            </div>
+          </div>
+          <div class="bl-info-row">
+            <div class="bl-tags">
+              <el-tag v-if="item.blockLoginFill" size="small" type="warning" effect="plain" class="bl-tag">
+                <svg viewBox="0 0 24 24" width="12" height="12" class="bl-tag-icon"><path :d="mdiLoginVariant"/></svg>
+                禁止登录填充
+              </el-tag>
+              <el-tag v-if="item.blockCaptchaFill" size="small" type="danger" effect="plain" class="bl-tag">
+                <svg viewBox="0 0 24 24" width="12" height="12" class="bl-tag-icon"><path :d="mdiRobotOutline"/></svg>
+                禁止验证码填充
+              </el-tag>
+            </div>
+            <div class="time-wrap">{{ formatDate(item.updatedAt) }}</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 黑名单新增/编辑 Dialog -->
+    <el-dialog
+      v-model="blDialogVisible"
+      :title="blDialogMode === 'add' ? '添加黑名单站点' : '编辑黑名单站点'"
+      width="95%"
+      :close-on-click-modal="false"
+      class="pt-dialog-custom"
+      @closed="resetBlacklistForm"
+    >
+      <el-form :model="blForm" :rules="blFormRules" ref="blFormRef" label-width="80px">
+        <el-form-item label="站点域名" prop="domain">
+          <el-input v-model="blForm.domain" placeholder="例如: m-team.cc" :disabled="blDialogMode === 'edit'" />
+        </el-form-item>
+        <el-form-item label="站点名称" prop="name">
+          <el-input v-model="blForm.name" placeholder="手动输入或自动关联中文名称" />
+        </el-form-item>
+        <el-form-item label="屏蔽规则">
+          <div class="bl-switch-group">
+            <div class="bl-switch-item">
+              <div class="bl-switch-label">
+                <svg viewBox="0 0 24 24" width="16" height="16" class="bl-switch-icon"><path :d="mdiLoginVariant"/></svg>
+                <span>禁止自动填充登录信息</span>
+              </div>
+              <el-switch v-model="blForm.blockLoginFill" />
+            </div>
+            <div class="bl-switch-item">
+              <div class="bl-switch-label">
+                <svg viewBox="0 0 24 24" width="16" height="16" class="bl-switch-icon"><path :d="mdiRobotOutline"/></svg>
+                <span>禁止自动识别验证码</span>
+              </div>
+              <el-switch v-model="blForm.blockCaptchaFill" />
+            </div>
+          </div>
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button @click="blDialogVisible = false">取消</el-button>
+        <el-button type="primary" @click="saveBlacklistForm" :loading="blFormSaving">确定</el-button>
+      </template>
+    </el-dialog>
+
     <!-- 凭据新增/编辑 Dialog -->
     <el-dialog
       v-model="ptAddEditDialogVisible"
-      :title="ptAddEditMode === 'add' ? '新增站点凭据' : '编辑站点凭据'"
+      :title="ptAddEditMode === 'add' ? (ptCredForm.category === 'custom' ? '新增自定义站点' : '新增站点凭据') : '编辑站点凭据'"
       width="95%"
       :close-on-click-modal="false"
       class="pt-dialog-custom"
@@ -327,9 +473,10 @@ import {
   mdiMagnify, mdiPlus, mdiExportVariant, mdiImport, mdiRefresh,
   mdiKeyOutline, mdiPencil, mdiDelete, mdiEye, mdiEyeOff,
   mdiDotsVertical, mdiContentCopy, mdiCloudUpload, mdiCloudDownload,
-  mdiSwapHorizontal
+  mdiSwapHorizontal, mdiShieldOffOutline, mdiLoginVariant, mdiRobotOutline
 } from '@mdi/js';
 import { PTCredentialStorageService, type PTCredential } from '../../shared/services/credentialStorage';
+import { SiteBlacklistService, type SiteBlacklistEntry } from '../../shared/services/siteBlacklist';
 import { isPinSecurityEnabled, verifyPin } from '../../shared/pinSecurity';
 import { decryptWebDavPassword, decryptWebDavUsername, decryptWebDavUrl } from '../../shared/secureStorage';
 import { STORAGE_KEYS } from '../../shared/constants';
@@ -343,8 +490,29 @@ const ptManagerLoading = ref(true);
 const ptCredsList = ref<PTCredential[]>([]);
 const visiblePasswords = reactive<Record<string, boolean>>({});
 const siteMapping = ref<Record<string, string>>({});
-const currentTab = ref<'pt' | 'custom'>('pt');
+const currentTab = ref<'pt' | 'custom' | 'blacklist'>('pt');
 const siteIcons = ref<Record<string, string>>({});
+
+// ==================== 黑名单状态 ====================
+const blacklistEntries = ref<SiteBlacklistEntry[]>([]);
+const blacklistLoading = ref(true);
+const blDialogVisible = ref(false);
+const blDialogMode = ref<'add' | 'edit'>('add');
+const blFormSaving = ref(false);
+const blFormRef = ref();
+const blEditingId = ref('');
+const blForm = reactive({
+  domain: '',
+  name: '',
+  blockLoginFill: true,
+  blockCaptchaFill: true
+});
+const blFormRules = {
+  domain: [
+    { required: true, message: '请输入站点域名', trigger: 'blur' },
+    { pattern: /^[a-zA-Z0-9][-a-zA-Z0-9]{0,62}(\.[a-zA-Z0-9][-a-zA-Z0-9]{0,62})+$/, message: '请输入合法的域名格式', trigger: 'blur' }
+  ]
+};
 
 // ==================== WebDav 备份状态 ====================
 const showPtWebDavImportDialog = ref(false);
@@ -369,6 +537,7 @@ const ptCredForm = reactive({
 });
 const ptCredFormRef = ref();
 const ptFileInput = ref<HTMLInputElement | null>(null);
+const blFileInput = ref<HTMLInputElement | null>(null);
 
 // ==================== PIN 验证状态 ====================
 const ptPinDialogVisible = ref(false);
@@ -400,11 +569,21 @@ const filteredPtCreds = computed(() => {
   );
 });
 
+const filteredBlacklist = computed(() => {
+  const kw = ptSearchKeyword.value.toLowerCase().trim();
+  if (!kw) return blacklistEntries.value;
+  return blacklistEntries.value.filter(item =>
+    (item.name || '').toLowerCase().includes(kw) ||
+    item.domain.toLowerCase().includes(kw)
+  );
+});
+
 // ==================== 生命周期 ====================
 onMounted(async () => {
   // 先加载站点映射，确保列表渲染时 siteMapping 已就绪，避免名称从域名闪烁为中文
   await fetchSiteMapping();
   await loadPtCreds();
+  await loadBlacklist();
 });
 // ==================== 存储工具 ====================
 
@@ -445,6 +624,183 @@ async function fetchSiteMapping() {
 }
 // ==================== 域名自动填充 ====================
 
+// ==================== 黑名单操作 ====================
+async function loadBlacklist() {
+  blacklistLoading.value = true;
+  try {
+    blacklistEntries.value = await SiteBlacklistService.getAll();
+  } catch (error) {
+    console.error('加载黑名单失败:', error);
+  } finally {
+    blacklistLoading.value = false;
+  }
+}
+
+function showBlacklistDialog(mode: 'add' | 'edit', item?: SiteBlacklistEntry) {
+  blDialogMode.value = mode;
+  if (mode === 'edit' && item) {
+    blEditingId.value = item.id;
+    blForm.domain = item.domain;
+    blForm.name = item.name;
+    blForm.blockLoginFill = item.blockLoginFill;
+    blForm.blockCaptchaFill = item.blockCaptchaFill;
+  } else {
+    blEditingId.value = '';
+    blForm.domain = '';
+    blForm.name = '';
+    blForm.blockLoginFill = true;
+    blForm.blockCaptchaFill = true;
+  }
+  blDialogVisible.value = true;
+}
+
+function resetBlacklistForm() {
+  blEditingId.value = '';
+  blFormRef.value?.resetFields();
+}
+
+async function saveBlacklistForm() {
+  if (!blFormRef.value) return;
+  const valid = await blFormRef.value.validate().catch(() => false);
+  if (!valid) return;
+  if (!blForm.blockLoginFill && !blForm.blockCaptchaFill) {
+    ElMessage.warning('请至少选择一项屏蔽规则');
+    return;
+  }
+  blFormSaving.value = true;
+  try {
+    await SiteBlacklistService.addOrUpdate(
+      blForm.domain,
+      blForm.name,
+      blForm.blockLoginFill,
+      blForm.blockCaptchaFill,
+      blEditingId.value || undefined
+    );
+    await loadBlacklist();
+    blDialogVisible.value = false;
+    ElMessage.success(blDialogMode.value === 'add' ? '已添加到黑名单' : '黑名单已更新');
+  } catch (error) {
+    ElMessage.error(`操作失败: ${(error as Error).message}`);
+  } finally {
+    blFormSaving.value = false;
+  }
+}
+
+async function deleteBlacklistEntry(item: SiteBlacklistEntry) {
+  try {
+    await ElMessageBox.confirm(`确定要移除 ${item.domain} 的黑名单规则吗？`, '提示', {
+      type: 'warning',
+      confirmButtonText: '确定',
+      cancelButtonText: '取消'
+    });
+  } catch {
+    return;
+  }
+  try {
+    await SiteBlacklistService.delete(item.id);
+    await loadBlacklist();
+    ElMessage.success('已移除黑名单');
+  } catch (error) {
+    ElMessage.error('删除失败');
+  }
+}
+
+async function addCredToBlacklist(item: PTCredential) {
+  const existing = await SiteBlacklistService.getByDomain(item.domain);
+  if (existing) {
+    ElMessage.warning(`${item.domain} 已在黑名单中`);
+    return;
+  }
+  await SiteBlacklistService.addOrUpdate(
+    item.domain,
+    item.name || siteMapping.value[item.domain] || '',
+    true,
+    true
+  );
+  await loadBlacklist();
+  ElMessage.success(`已将 ${item.domain} 加入黑名单`);
+}
+
+function handleBlacklistCommand(command: string, item: SiteBlacklistEntry) {
+  if (command === 'edit') {
+    showBlacklistDialog('edit', item);
+  } else if (command === 'delete') {
+    deleteBlacklistEntry(item);
+  }
+}
+
+// ==================== 黑名单独立导出导入 ====================
+async function exportBlacklistToJson() {
+  try {
+    const blacklist = await SiteBlacklistService.getAll();
+    if (blacklist.length === 0) {
+      ElMessage.warning('暂无黑名单数据可导出');
+      return;
+    }
+    const blob = new Blob([JSON.stringify({ blacklist, exportedAt: new Date().toISOString() }, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `site-blacklist-${new Date().toISOString().split('T')[0]}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+    ElMessage.success('黑名单导出成功');
+  } catch (error) {
+    ElMessage.error(`导出失败: ${(error as Error).message}`);
+  }
+}
+
+async function onBlFileSelected(event: Event) {
+  const target = event.target as HTMLInputElement;
+  const file = target.files?.[0];
+  if (!file) return;
+  try {
+    const text = await file.text();
+    const data = JSON.parse(text);
+    let importedBlacklist: SiteBlacklistEntry[] = [];
+    if (Array.isArray(data.blacklist)) {
+      importedBlacklist = data.blacklist;
+    } else if (Array.isArray(data)) {
+      importedBlacklist = data;
+    } else {
+      throw new Error('无效的黑名单备份文件');
+    }
+    if (importedBlacklist.length === 0) {
+      ElMessage.warning('备份文件中无黑名单数据');
+      return;
+    }
+    const currentBlacklist = await SiteBlacklistService.getAll();
+    const mergedBlacklist = [...currentBlacklist];
+    for (const imp of importedBlacklist) {
+      if (!imp.domain) continue;
+      const existIdx = mergedBlacklist.findIndex(e => e.domain.toLowerCase().trim() === imp.domain.toLowerCase().trim());
+      if (existIdx !== -1) {
+        mergedBlacklist[existIdx] = {
+          ...mergedBlacklist[existIdx],
+          name: imp.name || mergedBlacklist[existIdx].name,
+          blockLoginFill: imp.blockLoginFill,
+          blockCaptchaFill: imp.blockCaptchaFill,
+          updatedAt: new Date().toISOString()
+        };
+      } else {
+        mergedBlacklist.push({
+          ...imp,
+          id: imp.id || Math.random().toString(36).substring(2) + Date.now().toString(36),
+          createdAt: imp.createdAt || new Date().toISOString(),
+          updatedAt: imp.updatedAt || new Date().toISOString()
+        });
+      }
+    }
+    await SiteBlacklistService.saveAll(mergedBlacklist);
+    await loadBlacklist();
+    ElMessage.success(`成功导入 ${importedBlacklist.length} 条黑名单规则`);
+  } catch (error) {
+    ElMessage.error(`导入失败: ${(error as Error).message}`);
+  } finally {
+    target.value = '';
+  }
+}
+
 watch(() => ptCredForm.domain, (newVal) => {
   if (ptAddEditMode.value === 'add' && newVal) {
     const cleanDomain = newVal.toLowerCase().trim();
@@ -455,6 +811,21 @@ watch(() => ptCredForm.domain, (newVal) => {
       const matchedKey = Object.keys(siteMapping.value).find(k => k.toLowerCase().replace(/^www\./i, '') === noWww);
       if (matchedKey) {
         ptCredForm.name = siteMapping.value[matchedKey];
+      }
+    }
+  }
+});
+
+watch(() => blForm.domain, (newVal) => {
+  if (blDialogMode.value === 'add' && newVal) {
+    const cleanDomain = newVal.toLowerCase().trim();
+    if (siteMapping.value[cleanDomain]) {
+      blForm.name = siteMapping.value[cleanDomain];
+    } else {
+      const noWww = cleanDomain.replace(/^www\./i, '');
+      const matchedKey = Object.keys(siteMapping.value).find(k => k.toLowerCase().replace(/^www\./i, '') === noWww);
+      if (matchedKey) {
+        blForm.name = siteMapping.value[matchedKey];
       }
     }
   }
@@ -563,7 +934,7 @@ function copyUsername(username: string) {
 }
 
 // ==================== 凭据增删改 ====================
-function showPtAddEditDialog(mode: 'add' | 'edit', item?: PTCredential) {
+function showPtAddEditDialog(mode: 'add' | 'edit', item?: PTCredential, defaultTab?: string) {
   ptAddEditMode.value = mode;
   if (mode === 'edit' && item) {
     runWithPinProtection(() => {
@@ -581,7 +952,7 @@ function showPtAddEditDialog(mode: 'add' | 'edit', item?: PTCredential) {
     ptCredForm.username = '';
     ptCredForm.password = '';
     ptCredForm.name = '';
-    ptCredForm.category = 'pt';
+    ptCredForm.category = defaultTab === 'custom' ? 'custom' : 'pt';
     ptAddEditDialogVisible.value = true;
   }
 }
@@ -637,7 +1008,11 @@ async function handleDeletePtCred(item: PTCredential) {
 // ==================== 命令分发 ====================
 function handleMoreCommand(command: string) {
   if (command === 'refresh') {
-    loadPtCreds();
+    if (currentTab.value === 'blacklist') {
+      loadBlacklist();
+    } else {
+      loadPtCreds();
+    }
   } else if (command === 'webdav-export') {
     exportPtCredsToWebDav();
   } else if (command === 'webdav-import') {
@@ -646,6 +1021,10 @@ function handleMoreCommand(command: string) {
     exportPtCredsToJson();
   } else if (command === 'json-import') {
     ptFileInput.value?.click();
+  } else if (command === 'bl-json-export') {
+    exportBlacklistToJson();
+  } else if (command === 'bl-json-import') {
+    blFileInput.value?.click();
   }
 }
 
@@ -656,6 +1035,8 @@ function handleCardCommand(command: string, item: PTCredential) {
     handleDeletePtCred(item);
   } else if (command === 'toggle-category') {
     toggleCredCategory(item);
+  } else if (command === 'add-to-blacklist') {
+    addCredToBlacklist(item);
   }
 }
 
@@ -686,8 +1067,9 @@ async function toggleCredCategory(item: PTCredential) {
 async function exportPtCredsToJson() {
   try {
     const credentials = await PTCredentialStorageService.getCredentials();
-    if (credentials.length === 0) {
-      ElMessage.warning('暂无凭据数据可备份');
+    const blacklist = await SiteBlacklistService.getAll();
+    if (credentials.length === 0 && blacklist.length === 0) {
+      ElMessage.warning('暂无凭据和黑名单数据可备份');
       return;
     }
 
@@ -700,7 +1082,7 @@ async function exportPtCredsToJson() {
       return;
     }
 
-    const payload = await encryptPtBackup({ credentials, exportedAt: new Date().toISOString() }, backupKey);
+    const payload = await encryptPtBackup({ credentials, blacklist, exportedAt: new Date().toISOString() }, backupKey);
     const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
@@ -753,19 +1135,19 @@ async function tryAutoBackupOnPtChange() {
   }
 }
 
-async function decryptPtBackupPayload(payload: unknown): Promise<{ credentials: PTCredential[] }> {
+async function decryptPtBackupPayload(payload: unknown): Promise<{ credentials: PTCredential[]; blacklist?: SiteBlacklistEntry[] }> {
   if (isPtBackupEnvelope(payload)) {
     const backupKey = await requestPtBackupKey(
       'WebDav 备份密钥',
       '请输入用于解密凭据备份的备份密钥。请确保输入与备份时使用的密钥一致，否则无法成功解密还原数据。'
     );
     if (!backupKey) throw new Error('已取消输入备份密钥');
-    return decryptPtBackup<{ credentials: PTCredential[] }>(payload, backupKey);
+    return decryptPtBackup<{ credentials: PTCredential[]; blacklist?: SiteBlacklistEntry[] }>(payload, backupKey);
   }
 
   try {
     const { decryptObject } = await import('../../shared/secureStorage');
-    return decryptObject<{ credentials: PTCredential[] }>(payload as any);
+    return decryptObject<{ credentials: PTCredential[]; blacklist?: SiteBlacklistEntry[] }>(payload as any);
   } catch (error) {
     console.error('旧版 PT 备份解密失败:', error);
     throw new Error('旧版备份只能在创建它的同一扩展环境还原；跨设备请使用新备份密钥重新备份后再还原。');
@@ -802,7 +1184,8 @@ async function exportPtCredsToWebDav(allowKeyPrompt = true) {
       return;
     }
 
-    const payload = await encryptPtBackup({ credentials, exportedAt: new Date().toISOString() }, backupKey);
+    const blacklist = await SiteBlacklistService.getAll();
+    const payload = await encryptPtBackup({ credentials, blacklist, exportedAt: new Date().toISOString() }, backupKey);
     const jsonData = JSON.stringify(payload, null, 2);
     const now = new Date();
     const pad = (n: number) => String(n).padStart(2, '0');
@@ -1037,8 +1420,38 @@ async function importSelectedPtWebDavBackup() {
 
     await PTCredentialStorageService.saveCredentials(mergedList);
     await loadPtCreds();
+
+    // 还原黑名单
+    const importedBlacklist = decryptedStore?.blacklist || [];
+    if (importedBlacklist.length > 0) {
+      const currentBlacklist = await SiteBlacklistService.getAll();
+      const mergedBlacklist = [...currentBlacklist];
+      for (const imp of importedBlacklist) {
+        if (!imp.domain) continue;
+        const existIdx = mergedBlacklist.findIndex(e => e.domain.toLowerCase().trim() === imp.domain.toLowerCase().trim());
+        if (existIdx !== -1) {
+          mergedBlacklist[existIdx] = {
+            ...mergedBlacklist[existIdx],
+            name: imp.name || mergedBlacklist[existIdx].name,
+            blockLoginFill: imp.blockLoginFill,
+            blockCaptchaFill: imp.blockCaptchaFill,
+            updatedAt: new Date().toISOString()
+          };
+        } else {
+          mergedBlacklist.push({
+            ...imp,
+            id: imp.id || Math.random().toString(36).substring(2) + Date.now().toString(36),
+            createdAt: imp.createdAt || new Date().toISOString(),
+            updatedAt: imp.updatedAt || new Date().toISOString()
+          });
+        }
+      }
+      await SiteBlacklistService.saveAll(mergedBlacklist);
+      await loadBlacklist();
+    }
+
     showPtWebDavImportDialog.value = false;
-    ElMessage.success(`已从 WebDav 还原：${target.name}（${importedList.length} 个账号）`);
+    ElMessage.success(`已从 WebDav 还原：${target.name}（${importedList.length} 个账号${importedBlacklist.length > 0 ? `、${importedBlacklist.length} 条黑名单` : ''}）`);
   } catch (error) {
     console.error('从 WebDav 还原失败:', error);
     ElMessage.error(`从 WebDav 还原失败: ${(error as Error).message}`);
@@ -1103,12 +1516,16 @@ async function onPtFileSelected(event: Event) {
     const data = JSON.parse(text);
     
     let importedList: PTCredential[] = [];
+    let importedBlacklist: SiteBlacklistEntry[] = [];
+    let decryptedStore: any = null;
     
     if (data.ciphertext && data.iv && data.salt) {
-      const decryptedStore = await decryptPtBackupPayload(data);
+      decryptedStore = await decryptPtBackupPayload(data);
       importedList = decryptedStore?.credentials || [];
+      importedBlacklist = decryptedStore?.blacklist || [];
     } else if (data.credentials && Array.isArray(data.credentials)) {
       importedList = data.credentials;
+      importedBlacklist = data.blacklist || [];
     } else {
       throw new Error('无效的备份文件：格式不正确');
     }
@@ -1144,7 +1561,36 @@ async function onPtFileSelected(event: Event) {
 
     await PTCredentialStorageService.saveCredentials(mergedList);
     await loadPtCreds();
-    ElMessage.success(`成功导入并合并了 ${importedList.length} 个账号凭据`);
+
+    // 还原黑名单
+    if (importedBlacklist.length > 0) {
+      const currentBlacklist = await SiteBlacklistService.getAll();
+      const mergedBlacklist = [...currentBlacklist];
+      for (const imp of importedBlacklist) {
+        if (!imp.domain) continue;
+        const existIdx = mergedBlacklist.findIndex(e => e.domain.toLowerCase().trim() === imp.domain.toLowerCase().trim());
+        if (existIdx !== -1) {
+          mergedBlacklist[existIdx] = {
+            ...mergedBlacklist[existIdx],
+            name: imp.name || mergedBlacklist[existIdx].name,
+            blockLoginFill: imp.blockLoginFill,
+            blockCaptchaFill: imp.blockCaptchaFill,
+            updatedAt: new Date().toISOString()
+          };
+        } else {
+          mergedBlacklist.push({
+            ...imp,
+            id: imp.id || Math.random().toString(36).substring(2) + Date.now().toString(36),
+            createdAt: imp.createdAt || new Date().toISOString(),
+            updatedAt: imp.updatedAt || new Date().toISOString()
+          });
+        }
+      }
+      await SiteBlacklistService.saveAll(mergedBlacklist);
+      await loadBlacklist();
+    }
+
+    ElMessage.success(`成功导入并合并了 ${importedList.length} 个账号凭据${importedBlacklist.length > 0 ? `、${importedBlacklist.length} 条黑名单` : ''}`);
   } catch (error) {
     ElMessage.error(`导入本地 JSON 失败: ${(error as Error).message}`);
   } finally {
@@ -1859,5 +2305,96 @@ async function fetchSiteIcon(domain: string) {
   height: 2px;
   background: #16a34a;
   border-radius: 2px 2px 0 0;
+}
+
+/* 黑名单卡片样式 */
+.bl-card {
+  border-radius: 12px;
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.02);
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.bl-card:hover {
+  border-color: rgba(239, 68, 68, 0.3);
+  box-shadow: 0 4px 12px rgba(239, 68, 68, 0.06), 0 1px 3px rgba(0, 0, 0, 0.02);
+  transform: translateY(-1px);
+}
+
+.bl-info-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px dashed #e2e8f0;
+}
+
+.bl-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  min-width: 0;
+  flex: 1;
+}
+
+.bl-tag {
+  font-size: 11px;
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  border-radius: 6px;
+  padding: 0 6px;
+  height: 20px;
+  line-height: 1;
+  vertical-align: middle;
+}
+
+.bl-tag :deep(.el-tag__content) {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  line-height: 1;
+}
+
+.bl-tag-icon {
+  fill: currentColor;
+  flex-shrink: 0;
+}
+
+/* 黑名单对话框内开关组 */
+.bl-switch-group {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  width: 100%;
+}
+
+.bl-switch-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 12px;
+  border-radius: 8px;
+  border: 1px solid #e2e8f0;
+  background: #f8fafc;
+}
+
+.bl-switch-label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: #334155;
+}
+
+.bl-switch-icon {
+  fill: #64748b;
+  flex-shrink: 0;
 }
 </style>

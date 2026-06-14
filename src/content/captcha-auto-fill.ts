@@ -5,7 +5,40 @@
 
 (function () {
   const STORAGE_KEY = 'mp.web_embed_features';
+  const BLACKLIST_KEY = 'mp.site_blacklist';
   const TAG = '[MP 验证码填充]';
+
+  // ========== 黑名单检查 ==========
+  type BlacklistEntry = { domain: string; blockLoginFill?: boolean; blockCaptchaFill?: boolean };
+
+  async function getBlacklist(): Promise<BlacklistEntry[]> {
+    try {
+      const data = await chrome.storage.local.get([BLACKLIST_KEY]);
+      const list = data[BLACKLIST_KEY] as BlacklistEntry[] | undefined;
+      return Array.isArray(list) ? list : [];
+    } catch {
+      return [];
+    }
+  }
+
+  function matchBlacklistEntry(entries: BlacklistEntry[]): BlacklistEntry | null {
+    const host = location.hostname.toLowerCase().replace(/^www\./i, '');
+    for (const entry of entries) {
+      const ed = (entry.domain || '').toLowerCase().trim().replace(/^www\./i, '');
+      if (!ed) continue;
+      if (ed === host || host.endsWith(`.${ed}`) || ed.endsWith(`.${host}`)) return entry;
+    }
+    return null;
+  }
+
+  let cachedBlacklist: BlacklistEntry[] | null = null;
+  let cachedBlacklistMatch: BlacklistEntry | null | undefined; // undefined = 尚未检查
+
+  async function isCaptchaBlacklisted(): Promise<boolean> {
+    if (cachedBlacklist === null) cachedBlacklist = await getBlacklist();
+    if (cachedBlacklistMatch === undefined) cachedBlacklistMatch = matchBlacklistEntry(cachedBlacklist);
+    return cachedBlacklistMatch ? cachedBlacklistMatch.blockCaptchaFill !== false : false;
+  }
 
   // ========== 登录页面路径检测 ==========
   const LOGIN_PAGES = [
@@ -527,6 +560,11 @@
     const config = await getConfig();
     if (!config.totpAutoFillEnabled) return false;
 
+      // 黑名单检查
+      if (await isCaptchaBlacklisted()) {
+        log('当前站点在黑名单中，跳过两步验证码自动填充');
+        return false;
+      }
     isTotpProcessing = true;
     try {
       const sites = await getTotpSites();
@@ -1104,6 +1142,12 @@
       if (isProcessing) return false;
       const config = await getConfig();
       if (!config.captchaAutoFillEnabled) return false;
+
+      // 黑名单检查
+      if (await isCaptchaBlacklisted()) {
+        log('当前站点在黑名单中，跳过验证码自动填充');
+        return false;
+      }
 
       log('当前配置:', JSON.stringify(config));
 

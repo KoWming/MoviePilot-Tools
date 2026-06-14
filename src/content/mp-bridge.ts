@@ -629,7 +629,21 @@
     }
   }
 
-  function showToast(message: string, type: 'success' | 'error' | 'info' = 'info') {
+  // ========== 深色主题检测 ==========
+  async function isDarkMode(): Promise<boolean> {
+    try {
+      const data = await chrome.storage.local.get('mp.theme');
+      const mode = data['mp.theme'] as string | undefined;
+      if (mode === 'dark') return true;
+      if (mode === 'light') return false;
+      // auto 模式跟随系统偏好
+      return window.matchMedia('(prefers-color-scheme: dark)').matches;
+    } catch {
+      return false;
+    }
+  }
+
+  async function showToast(message: string, type: 'success' | 'error' | 'info' = 'info') {
     const toastHostId = 'mp-pt-toast-host';
     let host = document.getElementById(toastHostId);
     if (!host) {
@@ -650,25 +664,20 @@
     }
 
     const toast = document.createElement('div');
-    const bgColors = {
-      success: '#f0fdfa',
-      error: '#fef2f2',
-      info: '#f8fafc'
-    };
-    const borderColors = {
-      success: 'rgba(45, 212, 191, 0.4)',
-      error: 'rgba(248, 113, 113, 0.4)',
-      info: 'rgba(203, 213, 225, 0.4)'
-    };
-    const textColors = {
-      success: '#0f766e',
-      error: '#991b1b',
-      info: '#334155'
-    };
+    const dark = await isDarkMode();
+    const bgColors = dark
+      ? { success: 'rgba(6, 78, 59, 0.9)', error: 'rgba(127, 29, 29, 0.9)', info: 'rgba(30, 41, 59, 0.9)' }
+      : { success: '#f0fdfa', error: '#fef2f2', info: '#f8fafc' };
+    const borderColors = dark
+      ? { success: 'rgba(52, 211, 153, 0.3)', error: 'rgba(248, 113, 113, 0.3)', info: 'rgba(100, 116, 139, 0.3)' }
+      : { success: 'rgba(45, 212, 191, 0.4)', error: 'rgba(248, 113, 113, 0.4)', info: 'rgba(203, 213, 225, 0.4)' };
+    const textColors = dark
+      ? { success: '#6ee7b7', error: '#fca5a5', info: '#cbd5e1' }
+      : { success: '#0f766e', error: '#991b1b', info: '#334155' };
     const icons = {
-      success: `<svg viewBox="0 0 24 24" style="width:16px;height:16px;fill:#0d9488;flex-shrink:0;"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/></svg>`,
-      error: `<svg viewBox="0 0 24 24" style="width:16px;height:16px;fill:#e11d48;flex-shrink:0;"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-2h2v2zm0-4h-2V7h2v6z"/></svg>`,
-      info: `<svg viewBox="0 0 24 24" style="width:16px;height:16px;fill:#64748b;flex-shrink:0;"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-6h2v6zm0-8h-2V7h2v2z"/></svg>`
+      success: `<svg viewBox="0 0 24 24" style="width:16px;height:16px;fill:${dark ? '#34d399' : '#0d9488'};flex-shrink:0;"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/></svg>`,
+      error: `<svg viewBox="0 0 24 24" style="width:16px;height:16px;fill:${dark ? '#f87171' : '#e11d48'};flex-shrink:0;"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-2h2v2zm0-4h-2V7h2v6z"/></svg>`,
+      info: `<svg viewBox="0 0 24 24" style="width:16px;height:16px;fill:${dark ? '#94a3b8' : '#64748b'};flex-shrink:0;"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-6h2v6zm0-8h-2V7h2v2z"/></svg>`
     };
 
     toast.style.cssText = `
@@ -712,62 +721,92 @@
     }, 3000);
   }
 
-  function injectSaveBanner(domain: string, username: string, password: string) {
+  async function injectSaveBanner(domain: string, username: string, password: string) {
     const hostId = 'mp-pt-save-banner-host';
     if (document.getElementById(hostId)) return;
 
     try {
       const host = document.createElement('div');
       host.id = hostId;
-      host.style.cssText = 'position: fixed !important; top: 20px !important; right: -360px !important; width: 340px !important; z-index: 99999999 !important; transition: right 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275) !important;';
+      host.style.cssText = 'position: fixed !important; top: 20px !important; right: -360px !important; width: 320px !important; z-index: 99999999 !important; transition: right 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275) !important;';
       document.body.appendChild(host);
 
       const shadow = host.attachShadow({ mode: 'closed' });
+      const dark = await isDarkMode();
 
       const banner = document.createElement('div');
       banner.style.cssText = `
-        background: rgba(255, 255, 255, 0.98) !important;
+        background: ${dark ? 'rgba(30, 41, 59, 0.98)' : 'rgba(255, 255, 255, 0.98)'} !important;
         backdrop-filter: blur(10px) !important;
-        box-shadow: 0 10px 25px rgba(0, 0, 0, 0.12), 0 2px 6px rgba(0, 0, 0, 0.05) !important;
-        border: 1px solid rgba(226, 232, 240, 0.9) !important;
+        box-shadow: 0 10px 25px rgba(0, 0, 0, ${dark ? '0.4' : '0.12'}), 0 2px 6px rgba(0, 0, 0, ${dark ? '0.2' : '0.05'}) !important;
+        border: 1px solid ${dark ? 'rgba(71, 85, 105, 0.6)' : 'rgba(226, 232, 240, 0.9)'} !important;
         border-radius: 12px !important;
         padding: 10px 12px !important;
-        display: flex !important;
-        align-items: center !important;
-        gap: 10px !important;
         font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif !important;
         box-sizing: border-box !important;
         width: 100% !important;
+        position: relative !important;
       `;
+
+      // 右上角关闭按钮
+      const closeBtn = document.createElement('button');
+      closeBtn.innerHTML = '&times;';
+      closeBtn.style.cssText = `
+        position: absolute !important;
+        top: 6px !important;
+        right: 8px !important;
+        width: 20px !important;
+        height: 20px !important;
+        border: none !important;
+        background: transparent !important;
+        color: ${dark ? '#64748b' : '#94a3b8'} !important;
+        font-size: 16px !important;
+        line-height: 20px !important;
+        text-align: center !important;
+        cursor: pointer !important;
+        padding: 0 !important;
+        border-radius: 4px !important;
+        transition: all 0.15s !important;
+      `;
+      closeBtn.onmouseenter = () => { closeBtn.style.background = dark ? 'rgba(71,85,105,0.4)' : '#f1f5f9'; closeBtn.style.color = dark ? '#e2e8f0' : '#475569'; };
+      closeBtn.onmouseleave = () => { closeBtn.style.background = 'transparent'; closeBtn.style.color = dark ? '#64748b' : '#94a3b8'; };
+      closeBtn.onclick = () => { dismissBanner(); };
+
+      // 顶部信息行
+      const topRow = document.createElement('div');
+      topRow.style.cssText = 'display: flex !important; align-items: center !important; gap: 10px !important;';
 
       const logo = document.createElement('img');
       logo.src = chrome.runtime.getURL('icons/icon.png');
       logo.style.cssText = 'width: 28px !important; height: 28px !important; flex-shrink: 0 !important; border-radius: 6px !important;';
 
       const textWrap = document.createElement('div');
-      textWrap.style.cssText = 'flex: 1 !important; min-width: 0 !important;';
+      textWrap.style.cssText = 'flex: 1 !important; min-width: 0 !important; padding-right: 18px !important;';
 
       const title = document.createElement('div');
       title.textContent = 'MoviePilot Tools';
-      title.style.cssText = 'font-size: 12px !important; font-weight: 700 !important; color: #0f172a !important; text-align: left !important; line-height: 1.3 !important;';
+      title.style.cssText = `font-size: 12px !important; font-weight: 700 !important; color: ${dark ? '#f1f5f9' : '#0f172a'} !important; text-align: left !important; line-height: 1.3 !important;`;
 
       const desc = document.createElement('div');
-      desc.textContent = `保存 ${domain} 的账号密码？`;
-      desc.style.cssText = 'font-size: 11px !important; color: #64748b !important; margin-top: 1px !important; text-align: left !important; line-height: 1.3 !important; white-space: nowrap !important; overflow: hidden !important; text-overflow: ellipsis !important;';
+      desc.textContent = `检测到 ${domain} 登录，是否保存凭据？`;
+      desc.style.cssText = `font-size: 11px !important; color: ${dark ? '#94a3b8' : '#64748b'} !important; margin-top: 1px !important; text-align: left !important; line-height: 1.3 !important; white-space: nowrap !important; overflow: hidden !important; text-overflow: ellipsis !important;`;
 
       textWrap.appendChild(title);
       textWrap.appendChild(desc);
+      topRow.appendChild(logo);
+      topRow.appendChild(textWrap);
 
+      // 底部按钮行
       const btnRow = document.createElement('div');
-      btnRow.style.cssText = 'display: flex !important; gap: 6px !important; flex-shrink: 0 !important;';
+      btnRow.style.cssText = 'display: flex !important; gap: 6px !important; margin-top: 8px !important; justify-content: flex-end !important;';
 
-      const cancelBtn = document.createElement('button');
-      cancelBtn.textContent = '暂不';
-      cancelBtn.style.cssText = `
+      const blacklistBtn = document.createElement('button');
+      blacklistBtn.textContent = '加入黑名单';
+      blacklistBtn.style.cssText = `
         padding: 4px 10px !important;
-        border: 1px solid #cbd5e1 !important;
-        background: #fff !important;
-        color: #475569 !important;
+        border: 1px solid ${dark ? 'rgba(248,113,113,0.3)' : '#e2e8f0'} !important;
+        background: ${dark ? 'rgba(127,29,29,0.2)' : '#fff'} !important;
+        color: ${dark ? '#fca5a5' : '#dc2626'} !important;
         border-radius: 6px !important;
         font-size: 11px !important;
         cursor: pointer !important;
@@ -775,16 +814,28 @@
         transition: all 0.2s !important;
         box-sizing: border-box !important;
       `;
-      cancelBtn.onmouseenter = () => { cancelBtn.style.background = '#f8fafc'; };
-      cancelBtn.onmouseleave = () => { cancelBtn.style.background = '#fff'; };
-      cancelBtn.onclick = () => { dismissBanner(); };
+      blacklistBtn.onmouseenter = () => { blacklistBtn.style.background = dark ? 'rgba(127,29,29,0.35)' : '#fef2f2'; blacklistBtn.style.borderColor = dark ? 'rgba(248,113,113,0.5)' : '#fca5a5'; };
+      blacklistBtn.onmouseleave = () => { blacklistBtn.style.background = dark ? 'rgba(127,29,29,0.2)' : '#fff'; blacklistBtn.style.borderColor = dark ? 'rgba(248,113,113,0.3)' : '#e2e8f0'; };
+      blacklistBtn.onclick = () => {
+        chrome.runtime.sendMessage({
+          type: 'MP_PT_ADD_BLACKLIST',
+          domain
+        }, (resp) => {
+          if (resp?.success) {
+            dismissBanner();
+            showToast(`${domain} 已加入黑名单`, 'success');
+          } else {
+            showToast('加入黑名单失败: ' + (resp?.error || '未知错误'), 'error');
+          }
+        });
+      };
 
       const saveBtn = document.createElement('button');
       saveBtn.textContent = '保存凭据';
       saveBtn.style.cssText = `
-        padding: 4px 10px !important;
+        padding: 4px 14px !important;
         border: none !important;
-        background: #2563eb !important;
+        background: ${dark ? '#3b82f6' : '#2563eb'} !important;
         color: #fff !important;
         border-radius: 6px !important;
         font-size: 11px !important;
@@ -793,8 +844,8 @@
         transition: all 0.2s !important;
         box-sizing: border-box !important;
       `;
-      saveBtn.onmouseenter = () => { saveBtn.style.background = '#1d4ed8'; };
-      saveBtn.onmouseleave = () => { saveBtn.style.background = '#2563eb'; };
+      saveBtn.onmouseenter = () => { saveBtn.style.background = dark ? '#60a5fa' : '#1d4ed8'; };
+      saveBtn.onmouseleave = () => { saveBtn.style.background = dark ? '#3b82f6' : '#2563eb'; };
       saveBtn.onclick = () => {
         chrome.runtime.sendMessage({
           type: 'MP_PT_SAVE_CRED',
@@ -811,11 +862,11 @@
         });
       };
 
-      btnRow.appendChild(cancelBtn);
+      btnRow.appendChild(blacklistBtn);
       btnRow.appendChild(saveBtn);
 
-      banner.appendChild(logo);
-      banner.appendChild(textWrap);
+      banner.appendChild(closeBtn);
+      banner.appendChild(topRow);
       banner.appendChild(btnRow);
 
       shadow.appendChild(banner);

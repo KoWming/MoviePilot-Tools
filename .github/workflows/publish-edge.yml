@@ -1,100 +1,17 @@
-name: 构建与发布
+name: 发布至 Edge Add-ons
 
 on:
-  push:
-    branches:
-      - main
-    paths:
-      - 'version.json'
   workflow_dispatch:
-
-permissions:
-  contents: write
+    inputs:
+      tag:
+        description: '要发布的版本 tag（留空则使用最新 Release）'
+        required: false
+        default: ''
 
 jobs:
-  build:
-    name: 构建并发布浏览器扩展
-    runs-on: ubuntu-latest
-
-    steps:
-      - name: 拉取仓库代码
-        uses: actions/checkout@v4
-
-      - name: 安装 Node.js 环境
-        uses: actions/setup-node@v4
-        with:
-          node-version: 20
-          cache: 'npm'
-
-      - name: 安装依赖
-        run: npm ci
-
-      - name: 创建发布目录并还原私钥
-        env:
-          CRX_PRIVATE_KEY: ${{ secrets.CRX_PRIVATE_KEY }}
-        run: |
-          mkdir -p release
-          if [ -n "$CRX_PRIVATE_KEY" ]; then
-            echo -n "$CRX_PRIVATE_KEY" > release/moviepilot-tools.pem
-            echo "Private key restored from secrets."
-          else
-            echo "No CRX_PRIVATE_KEY secret found. A new key will be auto-generated for CRX packaging."
-          fi
-
-      - name: 构建并打包扩展程序
-        run: npm run build
-
-      - name: 上传构建产物 (GitHub Actions)
-        uses: actions/upload-artifact@v4
-        with:
-          name: extension-build
-          path: |
-            release/*.zip
-            release/*.crx
-
-      - name: 生成版本更新说明
-        id: release_notes
-        run: |
-          # 读取版本信息
-          version=$(jq -r '.version' version.json)
-          echo "Detected version from version.json: $version"
-          echo "version=$version" >> $GITHUB_OUTPUT
-          
-          # 提取对应版本的更新说明（数组则逐行输出，字符串则直接输出）
-          notes=$(jq -r --arg v "$version" '
-            (.history["v"+$v] // .history[$v] // empty)
-            | if type == "array" then .[] else . end
-          ' version.json)
-          
-          if [ -z "$notes" ]; then
-            notes="Release version $version"
-          fi
-          
-          # 写入发布说明文件
-          echo "$notes" > release_notes.md
-          echo "Generated release notes:"
-          echo "$notes"
-
-      - name: 创建 GitHub Release 发布版本
-        uses: softprops/action-gh-release@v2
-        with:
-          tag_name: v${{ steps.release_notes.outputs.version }}
-          name: MoviePilot Tools v${{ steps.release_notes.outputs.version }}
-          body_path: release_notes.md
-          files: |
-            release/*.zip
-            release/*.crx
-          draft: false
-          prerelease: false
-          fail_on_unmatched_files: true
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
   publish-edge:
     name: 发布至 Edge Add-ons 商店
-    needs: build
     runs-on: ubuntu-latest
-    if: ${{ needs.build.result == 'success' }}
     env:
       EDGE_CLIENT_ID: ${{ secrets.EDGE_CLIENT_ID }}
       EDGE_API_KEY: ${{ secrets.EDGE_API_KEY }}
@@ -105,15 +22,42 @@ jobs:
       - name: 检查 Edge API 凭据
         run: |
           if [ -z "$EDGE_CLIENT_ID" ] || [ -z "$EDGE_API_KEY" ] || [ -z "$EDGE_PRODUCT_ID" ]; then
-            echo "::warning::Edge Add-ons API 凭据未配置，跳过发布"
-            exit 0
+            echo "::error::Edge Add-ons API 凭据未配置，请在仓库 Secrets 中设置 EDGE_CLIENT_ID、EDGE_API_KEY、EDGE_PRODUCT_ID"
+            exit 1
           fi
 
-      - name: 下载构建产物
-        uses: actions/download-artifact@v4
-        with:
-          name: extension-build
-          path: release
+      - name: 拉取仓库代码
+        uses: actions/checkout@v4
+
+      - name: 确定目标版本
+        id: version
+        run: |
+          INPUT_TAG="${{ github.event.inputs.tag }}"
+          if [ -n "$INPUT_TAG" ]; then
+            TAG="$INPUT_TAG"
+          else
+            TAG=$(gh release list --limit 1 --json tagName --jq '.[0].tagName')
+          fi
+          if [ -z "$TAG" ]; then
+            echo "::error::未找到可用的 Release"
+            exit 1
+          fi
+          echo "tag=$TAG" >> $GITHUB_OUTPUT
+          echo "目标版本: $TAG"
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: 下载 Release 的 zip 包
+        run: |
+          mkdir -p release
+          gh release download "${{ steps.version.outputs.tag }}" \
+            --pattern "*.zip" \
+            --dir release \
+            --clobber
+          echo "下载的文件:"
+          ls -la release/
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: 上传扩展包至 Edge Add-ons
         id: upload
@@ -137,7 +81,6 @@ jobs:
           BODY=$(echo "$RESPONSE" | sed '$d')
 
           if [ "$HTTP_CODE" -eq 202 ]; then
-            # 从 Location header 提取 operationID
             OPERATION_ID=$(curl -s -D - \
               -H "Authorization: ApiKey $EDGE_API_KEY" \
               -H "X-ClientID: $EDGE_CLIENT_ID" \
@@ -191,14 +134,12 @@ jobs:
       - name: 提交发布审核
         id: publish
         run: |
-          VERSION=$(jq -r '.version' version.json 2>/dev/null || echo "unknown")
-
           PUBLISH_RESPONSE=$(curl -s -D /tmp/publish_headers.txt \
             -H "Authorization: ApiKey $EDGE_API_KEY" \
             -H "X-ClientID: $EDGE_CLIENT_ID" \
             -H "Content-Type: application/json" \
             -X POST \
-            -d "{\"notes\": \"Auto-publish v$VERSION via GitHub Actions\"}" \
+            -d "{\"notes\": \"Publish ${{ steps.version.outputs.tag }} via GitHub Actions\"}" \
             "$API_ENDPOINT/v1/products/$EDGE_PRODUCT_ID/submissions")
 
           HTTP_CODE=$(grep HTTP /tmp/publish_headers.txt | awk '{print $2}')
@@ -232,7 +173,7 @@ jobs:
               echo "✅ Edge Add-ons 发布成功"
               exit 0
             elif [ "$STATUS" = "Failed" ]; then
-              echo "::warning::发布审核可能未通过（常见于首次提交），请检查 Partner Center"
+              echo "::warning::发布审核可能未通过，请检查 Partner Center"
               echo "详情: $STATUS_RESPONSE"
               exit 0
             fi

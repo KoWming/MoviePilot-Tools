@@ -33,7 +33,8 @@ export const STORAGE_KEYS = {
   PT_CREDS_CONFIG: 'mp.pt_creds_config',
   PT_BACKUP_KEY: 'mp.pt_backup_key',
   CUSTOM_BG_CONFIG: 'mp.custom_bg_config',
-  CUSTOM_BG_IMAGE: 'mp.custom_bg_image'
+  CUSTOM_BG_IMAGE: 'mp.custom_bg_image',
+  SITE_BLACKLIST: 'mp.site_blacklist'
 } as const;
 
 /**
