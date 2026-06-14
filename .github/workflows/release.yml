@@ -140,9 +140,8 @@ jobs:
           echo "HTTP 状态码: $HTTP_CODE"
 
           if [ "$HTTP_CODE" = "202" ]; then
-            OPERATION_ID=$(grep -i "^Location:" /tmp/upload_headers.txt \
-              | sed 's|.*operations/||' \
-              | tr -d '\r\n[:space:]')
+            LOCATION=$(grep -i "^Location:" /tmp/upload_headers.txt | sed 's/^Location:\s*//i' | tr -d '\r\n[:space:]')
+            OPERATION_ID=$(echo "$LOCATION" | awk -F/ '{print $NF}')
 
             if [ -z "$OPERATION_ID" ]; then
               echo "::error::上传成功但未获取到 operationID"
@@ -204,9 +203,8 @@ jobs:
           HTTP_CODE=$(grep '^HTTP/' /tmp/publish_headers.txt | tail -1 | awk '{print $2}' | tr -d '\r')
 
           if [ "$HTTP_CODE" = "202" ]; then
-            OPERATION_ID=$(grep -i "^Location:" /tmp/publish_headers.txt \
-              | sed 's|.*operations/||' \
-              | tr -d '\r\n[:space:]')
+            LOCATION=$(grep -i "^Location:" /tmp/publish_headers.txt | sed 's/^Location:\s*//i' | tr -d '\r\n[:space:]')
+            OPERATION_ID=$(echo "$LOCATION" | awk -F/ '{print $NF}')
             echo "publish_op_id=$OPERATION_ID" >> $GITHUB_OUTPUT
             echo "发布已提交，operationID: $OPERATION_ID"
           else
