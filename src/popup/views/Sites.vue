@@ -54,25 +54,29 @@
         </el-select>
       </div>
       <div class="toolbar-row actions">
-        <el-button class="compact" size="small" @click="refreshAll"><svg viewBox="0 0 24 24" width="14" height="14" class="icon-btn"><path :d="mdiRefresh"/></svg> 刷新</el-button>
-        <el-dropdown @command="handleExportCommand" trigger="click">
-          <el-button class="compact" size="small">
-            <svg viewBox="0 0 24 24" width="14" height="14" class="icon-btn"><path :d="mdiExportVariant"/></svg> 导出
-            <svg viewBox="0 0 24 24" width="12" height="12" class="ml-1" style="transform: rotate(90deg);"><path d="M8.59 16.59L13.17 12 8.59 7.41 10 6l6 6-6 6-1.41-1.41z" fill="currentColor"/></svg>
+        <div class="action-group">
+          <el-button class="compact" size="small" @click="refreshAll"><svg viewBox="0 0 24 24" width="14" height="14" class="icon-btn"><path :d="mdiRefresh"/></svg> 刷新</el-button>
+          <el-dropdown @command="handleExportCommand" trigger="click">
+            <el-button class="compact" size="small">
+              <svg viewBox="0 0 24 24" width="14" height="14" class="icon-btn"><path :d="mdiExportVariant"/></svg> 导出
+              <svg viewBox="0 0 24 24" width="12" height="12" class="ml-1" style="transform: rotate(90deg);"><path d="M8.59 16.59L13.17 12 8.59 7.41 10 6l6 6-6 6-1.41-1.41z" fill="currentColor"/></svg>
+            </el-button>
+            <template #dropdown>
+              <el-dropdown-menu>
+                <el-dropdown-item command="image">导出为图片</el-dropdown-item>
+                <el-dropdown-item command="json">导出为JSON</el-dropdown-item>
+                <el-dropdown-item command="csv">导出为CSV</el-dropdown-item>
+              </el-dropdown-menu>
+            </template>
+          </el-dropdown>
+        </div>
+        <div class="action-group">
+          <el-button class="compact" size="small" type="primary" @click="onSyncClick"><svg viewBox="0 0 24 24" width="14" height="14" class="icon-btn"><path :d="mdiSync"/></svg> 同步</el-button>
+          <el-button class="compact" size="small" :type="privacyMode ? 'success' : 'default'" @click="togglePrivacyMode">
+            <svg viewBox="0 0 24 24" width="14" height="14" class="icon-btn"><path :d="mdiShieldOutline"/></svg> 
+            {{ privacyMode ? '关闭隐私' : '启用隐私' }}
           </el-button>
-          <template #dropdown>
-            <el-dropdown-menu>
-              <el-dropdown-item command="image">导出为图片</el-dropdown-item>
-              <el-dropdown-item command="json">导出为JSON</el-dropdown-item>
-              <el-dropdown-item command="csv">导出为CSV</el-dropdown-item>
-            </el-dropdown-menu>
-          </template>
-        </el-dropdown>
-        <el-button class="compact" size="small" type="primary" @click="onSyncClick"><svg viewBox="0 0 24 24" width="14" height="14" class="icon-btn"><path :d="mdiSync"/></svg> 同步</el-button>
-        <el-button size="small" :type="privacyMode ? 'success' : 'default'" @click="togglePrivacyMode">
-          <svg viewBox="0 0 24 24" width="14" height="14" class="icon-btn"><path :d="mdiShieldOutline"/></svg> 
-          {{ privacyMode ? '关闭隐私' : '启用隐私' }}
-        </el-button>
+        </div>
       </div>
     </div>
 
@@ -1045,7 +1049,31 @@ onMounted(async () => {
 .toolbar { width: 100%; max-width: 100%; min-width: 0; overflow: hidden; display:flex; flex-direction: column; gap:6px; margin-bottom:6px; }
 .toolbar-row.inputs { min-width: 0; display:grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap:6px; }
 .toolbar-row.inputs .full { width: 100%; min-width: 0; }
-.toolbar-row.actions { min-width: 0; display:grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap:2px; }
+.toolbar-row.actions {
+  min-width: 0;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 6px;
+}
+
+.action-group {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 4px;
+}
+
+.action-group > .el-button,
+.action-group > .el-dropdown {
+  width: 100%;
+}
+
+.action-group > .el-dropdown :deep(.el-button) {
+  width: 100%;
+}
+
+.action-group :deep(.el-button) {
+  margin-left: 0 !important;
+}
 .toolbar-row.actions .compact :deep(.el-button__text){ white-space: nowrap; }
 .toolbar-row.actions .compact { 
   min-width: 0;

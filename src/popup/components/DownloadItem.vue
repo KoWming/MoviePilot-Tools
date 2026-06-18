@@ -252,6 +252,7 @@ function onImageError(event: Event) {
 <style scoped>
 .download-item {
   margin-bottom: 6px;
+  flex-shrink: 0;
 }
 
 .item-header {

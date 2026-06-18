@@ -99,6 +99,10 @@ function refresh() {
   return loadDownloads(false);
 }
 
+defineExpose({
+  refresh
+});
+
 // 自动刷新（每 5 秒）
 function startAutoRefresh() {
   stopAutoRefresh();

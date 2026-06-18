@@ -611,6 +611,21 @@ html.has-custom-bg-body, body.has-custom-bg-body, .has-custom-bg-body #app {
   box-shadow: 0 4px 16px rgba(0, 0, 0, 0.05) !important;
 }
 
+.popup-root.has-custom-bg .iframe-box.is-plugins-list {
+  background: rgba(255, 255, 255, 0.25) !important;
+  backdrop-filter: blur(12px) saturate(110%) !important;
+  -webkit-backdrop-filter: blur(12px) saturate(110%) !important;
+  border: none !important;
+}
+
+[data-theme="dark"] .popup-root.has-custom-bg .iframe-box.is-plugins-list {
+  background: rgba(15, 23, 42, 0.35) !important;
+}
+
+.popup-root.has-custom-bg .iframe {
+  background: transparent !important;
+}
+
 .popup-root.has-custom-bg .site-loading-shimmer {
   background: linear-gradient(90deg, rgba(255, 255, 255, 0.24) 25%, rgba(255, 255, 255, 0.56) 37%, rgba(255, 255, 255, 0.24) 63%) !important;
   background-size: 400% 100% !important;
@@ -877,24 +892,6 @@ html.has-custom-bg-body, body.has-custom-bg-body, .has-custom-bg-body #app {
 }
 
 /* Glassmorphism overrides for Sites.vue specific components */
-/* Overview icon wraps */
-.popup-root.has-custom-bg .ov-card .icon-wrap {
-  backdrop-filter: blur(4px) !important;
-  -webkit-backdrop-filter: blur(4px) !important;
-  border: 1px solid rgba(255, 255, 255, 0.15) !important;
-}
-.popup-root.has-custom-bg .ov-card .icon-wrap.green {
-  background: rgba(34, 197, 94, 0.45) !important;
-}
-.popup-root.has-custom-bg .ov-card .icon-wrap.blue {
-  background: rgba(59, 130, 246, 0.45) !important;
-}
-.popup-root.has-custom-bg .ov-card .icon-wrap.orange {
-  background: rgba(245, 158, 11, 0.45) !important;
-}
-.popup-root.has-custom-bg .ov-card .icon-wrap.red {
-  background: rgba(239, 68, 68, 0.45) !important;
-}
 
 /* User Level Badge */
 .popup-root.has-custom-bg .user-level {

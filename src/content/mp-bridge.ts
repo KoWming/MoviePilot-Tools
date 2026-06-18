@@ -1,7 +1,28 @@
 // content-script: 接收扩展或 iframe 的 postMessage，打开 MP 原生插件弹窗
 (function () {
   function isPluginsPage(): boolean {
-    return location.hash.startsWith('#/plugins');
+    try {
+      const hash = location.hash || '';
+      if (hash.includes('/plugin/')) return false;
+
+      // 1. 如果还在首屏加载中（Vue 还没挂载），判定为加载阶段，允许透光
+      const hasApp = document.querySelector('.v-application');
+      if (!hasApp) return true;
+
+      // 如果检测到具体插件的载体页面渲染，则不属于主列表页，阻断毛玻璃
+      const hasPluginApp = document.querySelector('.plugin-app-page');
+      if (hasPluginApp) return false;
+
+      // 2. 如果已进入 Vuetify 容器，主列表必须包含“我的插件”或“插件市场”标签，否则为打开插件设置/数据页
+      const text = document.body.textContent || '';
+      const hasListTab = text.includes('我的插件') || text.includes('插件市场');
+      if (!hasListTab) return false;
+
+      // 3. 检测是否有弹窗遮罩
+      const hasDialog = document.querySelector('.v-dialog, .v-overlay--active, [class*="dialog"]');
+      if (hasDialog) return false;
+    } catch {}
+    return true;
   }
 
   function isInIframe(): boolean {
@@ -99,20 +120,39 @@
     return null;
   }
 
+  function getQueryTransparent(): boolean {
+    try {
+      const url = new URL(location.href);
+      let trans = url.searchParams.get('transparent') || new URLSearchParams(url.hash.split('?')[1] || '').get('transparent');
+      return trans === '1';
+    } catch { }
+    return false;
+  }
+
   // 立即在运行初期根据 URL 注入初始主题，防止首屏加载闪白
   const initialTheme = getQueryTheme();
-  if (initialTheme && isInIframe() && isPluginsPage()) {
-    currentTheme = initialTheme;
+  const initialTransparent = getQueryTransparent();
+  if (isInIframe() && isPluginsPage()) {
+    if (initialTheme) {
+      currentTheme = initialTheme;
+      try {
+        const root = document.documentElement;
+        if (initialTheme === 'dark') {
+          root.classList.remove('v-theme--light', 'theme-light');
+          root.classList.add('v-theme--dark', 'theme-dark');
+          root.setAttribute('data-theme', 'dark');
+          root.style.colorScheme = 'dark';
+        }
+        // 立即启动主题纠正观察，确保在 DOM 加载早期捕获所有亮色组件并修正
+        startThemeObserver();
+      } catch { }
+    }
+    if (initialTransparent) {
+      try {
+        applyTransparentUI();
+      } catch { }
+    }
     try {
-      const root = document.documentElement;
-      if (initialTheme === 'dark') {
-        root.classList.remove('v-theme--light', 'theme-light');
-        root.classList.add('v-theme--dark', 'theme-dark');
-        root.setAttribute('data-theme', 'dark');
-        root.style.colorScheme = 'dark';
-      }
-      // 立即启动主题纠正观察，确保在 DOM 加载早期捕获所有亮色组件并修正
-      startThemeObserver();
       ensureStyleAtBottom();
     } catch { }
   }
@@ -137,11 +177,21 @@
 
   function ensureStyleAtBottom() {
     try {
-      const style = document.getElementById('mp-embed-minimal-style');
-      if (style) {
-        const parent = style.parentElement;
-        if (parent && parent.lastElementChild !== style) {
-          parent.appendChild(style);
+      const minimal = document.getElementById('mp-embed-minimal-style');
+      const transparent = document.getElementById('mp-embed-transparent-style');
+      
+      if (transparent) {
+        const parent = transparent.parentElement;
+        if (parent && parent.lastElementChild !== transparent) {
+          parent.appendChild(transparent);
+        }
+        if (minimal && transparent.parentNode && transparent.previousElementSibling !== minimal) {
+          transparent.parentNode.insertBefore(minimal, transparent);
+        }
+      } else if (minimal) {
+        const parent = minimal.parentElement;
+        if (parent && parent.lastElementChild !== minimal) {
+          parent.appendChild(minimal);
         }
       }
     } catch { }
@@ -214,10 +264,39 @@
     } catch { }
   }
 
+  function notifyParentRoute() {
+    try {
+      window.parent.postMessage({
+        type: 'MP_IFRAME_ROUTE_CHANGE',
+        isPluginsPage: isPluginsPage()
+      }, '*');
+    } catch {}
+  }
+
+  let routeObserver: MutationObserver | null = null;
+  function startRouteObserver() {
+    if (!isInIframe() || routeObserver) return;
+    try {
+      routeObserver = new MutationObserver(() => {
+        notifyParentRoute();
+      });
+      routeObserver.observe(document.documentElement || document.body, {
+        childList: true,
+        subtree: true
+      });
+    } catch {}
+  }
+
   function initAutoLogin() {
     if (!isInIframe()) return;
 
     startThemeObserver();
+    notifyParentRoute();
+    startRouteObserver();
+
+    if (getQueryTransparent()) {
+      applyTransparentUI();
+    }
 
     // 监听父窗口发来的消息 (凭据与主题)
     window.addEventListener('message', (event: MessageEvent) => {
@@ -226,6 +305,13 @@
       }
       if (event.data?.type === 'MP_THEME_CHANGE' && event.data?.theme) {
         applyTheme(event.data.theme);
+      }
+      if (event.data?.type === 'MP_IFRAME_SET_TRANSPARENT') {
+        if (event.data.transparent) {
+          applyTransparentUI();
+        } else {
+          cleanupTransparentUI();
+        }
       }
     });
     // 主动向父窗口请求凭据和主题
@@ -241,8 +327,8 @@
 
   function applyMinimalUI() {
     try {
-      // 只有在iframe中且是插件页面才应用最小化UI样式
-      if (!isInIframe() || !isPluginsPage()) {
+      // 只有在iframe中才应用最小化UI样式
+      if (!isInIframe()) {
         return;
       }
 
@@ -285,10 +371,31 @@
         html[data-theme="dark"] body,
         html[data-theme="dark"] #app,
         html[data-theme="dark"] .v-application,
+        html[data-theme="dark"] .v-application__wrap,
+        html[data-theme="dark"] .v-layout,
+        html[data-theme="dark"] .v-main,
         html[data-theme="dark"] [class*="loading"],
-        html[data-theme="dark"] [id*="loading"] {
+        html[data-theme="dark"] [id*="loading"],
+        html[data-theme="dark"] .loading-main,
+        html[data-theme="dark"] .loading-wrapper {
           background-color: #121212 !important;
           color: #e2e8f0 !important;
+        }
+
+        /* 浅色主题兜底，确保在iframe里整体底色是白色的，并强行覆写首屏加载遮罩与容器 */
+        html[data-theme="light"],
+        html[data-theme="light"] body,
+        html[data-theme="light"] #app,
+        html[data-theme="light"] .v-application,
+        html[data-theme="light"] .v-application__wrap,
+        html[data-theme="light"] .v-layout,
+        html[data-theme="light"] .v-main,
+        html[data-theme="light"] [class*="loading"],
+        html[data-theme="light"] [id*="loading"],
+        html[data-theme="light"] .loading-main,
+        html[data-theme="light"] .loading-wrapper {
+          background-color: #ffffff !important;
+          color: #0f172a !important;
         }
 
         /* 强力覆写：当父级 html 带有 data-theme="dark" 时，任何未被即时纠正的 v-theme--light 容器也必须应用深色变量 */
@@ -297,7 +404,6 @@
           --v-theme-surface: 30, 30, 30 !important;
           --v-theme-on-background: 226, 232, 240 !important;
           --v-theme-on-surface: 226, 232, 240 !important;
-          background-color: #121212 !important;
           color: #e2e8f0 !important;
         }
         html[data-theme="dark"] .v-theme--light .v-card,
@@ -362,6 +468,70 @@
   function cleanupMinimalUI() {
     try {
       const style = document.getElementById('mp-embed-minimal-style');
+      if (style) {
+        style.remove();
+      }
+    } catch { }
+  }
+
+  function applyTransparentUI() {
+    try {
+      if (!isInIframe()) return;
+      const id = 'mp-embed-transparent-style';
+      if (document.getElementById(id)) return;
+      const style = document.createElement('style');
+      style.id = id;
+      style.textContent = `
+        /* 适配父窗口的自定义背景，让全局大容器背景透明，透出父窗口的毛玻璃效果 */
+        /* 使用与兜底样式相同的特异性选择器以确保能够完美覆盖 */
+        html,
+        html[data-theme="dark"],
+        html[data-theme="light"],
+        html body,
+        html[data-theme="dark"] body,
+        html[data-theme="light"] body,
+        html #app,
+        html[data-theme="dark"] #app,
+        html[data-theme="light"] #app,
+        html .v-application,
+        html[data-theme="dark"] .v-application,
+        html[data-theme="light"] .v-application,
+        html .v-application__wrap,
+        html[data-theme="dark"] .v-application__wrap,
+        html[data-theme="light"] .v-application__wrap,
+        html .v-layout,
+        html[data-theme="dark"] .v-layout,
+        html[data-theme="light"] .v-layout,
+        html .v-main,
+        html[data-theme="dark"] .v-main,
+        html[data-theme="light"] .v-main,
+        html .v-theme--light,
+        html .v-theme--dark,
+        html[data-theme="dark"] .v-theme--light,
+        html[data-theme="dark"] .v-theme--dark,
+        html [class*="loading"],
+        html[data-theme="dark"] [class*="loading"],
+        html[data-theme="light"] [class*="loading"],
+        html [id*="loading"],
+        html[data-theme="dark"] [id*="loading"],
+        html[data-theme="light"] [id*="loading"],
+        html .loading-main,
+        html[data-theme="dark"] .loading-main,
+        html[data-theme="light"] .loading-main,
+        html .loading-wrapper,
+        html[data-theme="dark"] .loading-wrapper,
+        html[data-theme="light"] .loading-wrapper {
+          background: transparent !important;
+          background-color: transparent !important;
+        }
+      `;
+      (document.head || document.documentElement).appendChild(style);
+    } catch {}
+  }
+
+  function cleanupTransparentUI() {
+    try {
+      const style = document.getElementById('mp-embed-transparent-style');
       if (style) {
         style.remove();
       }
@@ -485,18 +655,11 @@
   }
 
   window.addEventListener('hashchange', () => {
-    if (isPluginsPage()) {
-      try { applyMinimalUI(); } catch { }
-      startIframeObserver();
-    } else {
-      // 离开插件页面时清理样式
-      cleanupMinimalUI();
-      stopIframeObserver();
-    }
+    notifyParentRoute();
   });
 
   // 页面卸载时清理样式
-  window.addEventListener('beforeunload', () => { cleanupMinimalUI(); stopIframeObserver(); });
+  window.addEventListener('beforeunload', () => { cleanupMinimalUI(); cleanupTransparentUI(); stopIframeObserver(); });
 
   function handleMessage(event: MessageEvent) {
     const data = event.data as any;

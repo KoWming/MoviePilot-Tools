@@ -1,6 +1,6 @@
 <template>
   <div class="wrap">
-    <div class="iframe-box">
+    <div class="iframe-box" :class="{ 'is-plugins-list': isPluginsPage }">
       <iframe ref="iframeRef" :src="iframeUrl" class="iframe" @load="onIframeLoad" />
     </div>
   </div>
@@ -12,12 +12,46 @@
 // 内嵌 iframe 加载 MoviePilot 原生插件管理页面
 // ============================================================
 import { ref, onMounted, onUnmounted, watch } from 'vue';
+import { getCustomBgConfig } from '../../shared/customBg';
 import { STORAGE_KEYS } from '../../shared/constants';
 import { loadCredentials } from '../../shared/secureStorage';
 import { themeState } from '../../shared/stores/themeStore';
 
 const iframeRef = ref<HTMLIFrameElement | null>(null);
 const iframeUrl = ref('');
+const isPluginsPage = ref(true);
+const hasCustomBg = ref(false);
+
+async function loadCustomBgConfig() {
+  try {
+    const config = await getCustomBgConfig();
+    hasCustomBg.value = !!config?.enabled;
+    updateIframeTransparency();
+  } catch {}
+}
+
+function updateIframeTransparency() {
+  if (!iframeRef.value?.contentWindow) return;
+  const transparent = isPluginsPage.value && hasCustomBg.value;
+  try {
+    iframeRef.value.contentWindow.postMessage(
+      { type: 'MP_IFRAME_SET_TRANSPARENT', transparent },
+      '*'
+    );
+  } catch {}
+}
+
+function onStorageChange(changes: Record<string, chrome.storage.StorageChange>, areaName: string) {
+  if (areaName === 'local' && changes[STORAGE_KEYS.CUSTOM_BG_CONFIG]) {
+    const val = changes[STORAGE_KEYS.CUSTOM_BG_CONFIG].newValue as any;
+    hasCustomBg.value = !!val?.enabled;
+    updateIframeTransparency();
+  }
+}
+
+watch(isPluginsPage, () => {
+  updateIframeTransparency();
+});
 
 async function getBaseURL(): Promise<string> {
   const data = await chrome.storage.local.get([STORAGE_KEYS.BASE_URL]);
@@ -33,7 +67,12 @@ async function getBaseURL(): Promise<string> {
 async function load() {
   const base = await getBaseURL();
   (window as any).__mp_base_url = base;
-  iframeUrl.value = `${base}/#/plugins?tab=installed&theme=${themeState.effective}`;
+  try {
+    const config = await getCustomBgConfig();
+    hasCustomBg.value = !!config?.enabled;
+  } catch {}
+  const transParam = hasCustomBg.value ? '1' : '0';
+  iframeUrl.value = `${base}/#/plugins?tab=installed&theme=${themeState.effective}&transparent=${transParam}`;
 }
 
 function sendThemeToIframe(theme: 'light' | 'dark') {
@@ -56,6 +95,7 @@ watch(
 
 function onIframeLoad() {
   sendThemeToIframe(themeState.effective);
+  updateIframeTransparency();
 }
 
 // 响应 iframe 的请求
@@ -72,16 +112,22 @@ async function onMessage(event: MessageEvent) {
     } catch { /* 静默忽略 */ }
   } else if (event.data?.type === 'MP_IFRAME_NEED_THEME') {
     sendThemeToIframe(themeState.effective);
+  } else if (event.data?.type === 'MP_IFRAME_ROUTE_CHANGE') {
+    isPluginsPage.value = event.data.isPluginsPage !== false;
+    updateIframeTransparency();
   }
 }
 
 onMounted(() => {
   load();
   window.addEventListener('message', onMessage);
+  chrome.storage.onChanged.addListener(onStorageChange);
+  loadCustomBgConfig();
 });
 
 onUnmounted(() => {
   window.removeEventListener('message', onMessage);
+  chrome.storage.onChanged.removeListener(onStorageChange);
 });
 </script>
 
