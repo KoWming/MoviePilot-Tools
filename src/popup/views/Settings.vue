@@ -704,7 +704,7 @@
 // 设置页面视图
 // 主题/背景/Cookie UA 自动更新/站点自动打开/PIN/功能开关
 // ============================================================
-import { computed, nextTick, onMounted, reactive, ref } from 'vue';
+import { computed, nextTick, onMounted, reactive, ref, watch } from 'vue';
 import { ElMessage } from 'element-plus';
 import { mdiCookieRefreshOutline, mdiOpenInNew, mdiShieldLockOutline, mdiWebBox, mdiKeyOutline, mdiImageOutline } from '@mdi/js';
 import { compressAndResizeImage, downloadAndCompressImage, saveCustomBgConfig as saveCustomBgToStorage, saveCustomBgImage as saveCustomBgImageToStorage, clearCustomBgImage } from '../../shared/customBg';
@@ -1071,6 +1071,30 @@ function openPinDialog(mode: 'enable' | 'disable' | 'frequency') {
   pinDialogMode.value = mode;
   pinDialogVisible.value = true;
 }
+
+watch(pinDialogVisible, (visible: boolean) => {
+  if (visible) {
+    const field = pinDialogMode.value === 'enable' ? 'pin' : 'currentPin';
+    const tryFocus = () => {
+      const firstInput = getPinInputs(field)[0];
+      if (firstInput) {
+        firstInput.focus();
+        firstInput.select();
+        return true;
+      }
+      return false;
+    };
+    nextTick(() => {
+      requestAnimationFrame(() => {
+        if (!tryFocus()) {
+          setTimeout(tryFocus, 50);
+        }
+      });
+    });
+    // 应对 Dialog 的淡入转场动画
+    setTimeout(tryFocus, 150);
+  }
+});
 
 // ========== PIN 6 位独立输入框 ==========
 

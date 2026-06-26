@@ -1,7 +1,7 @@
 {
   "name": "MoviePilot Tools",
   "description": "MoviePilot- 支持站点同步、下载管理、数据统计等功能的浏览器扩展",
-  "version": "1.3.2",
+  "version": "1.3.4",
   "manifest_version": 3,
   "action": {
     "default_title": "MoviePilot Tools",

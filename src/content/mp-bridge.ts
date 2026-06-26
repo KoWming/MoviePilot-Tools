@@ -1,5 +1,26 @@
-// content-script: 接收扩展或 iframe 的 postMessage，打开 MP 原生插件弹窗
-(function () {
+(async function () {
+  // 黑名单提前拦截，避免对黑名单站点注册任何监听器或 DOM 观察器
+  try {
+    const host = window.location.hostname.toLowerCase().trim().replace(/^www\./i, '');
+    if (host) {
+      const data = await chrome.storage.local.get(['mp.site_blacklist']);
+      const list = data['mp.site_blacklist'];
+      if (Array.isArray(list)) {
+        const isBlocked = list.some((entry: any) => {
+          const ed = (entry.domain || '').toLowerCase().trim().replace(/^www\./i, '');
+          if (!ed) return false;
+          return ed === host || host.endsWith(`.${ed}`) || ed.endsWith(`.${host}`);
+        });
+        if (isBlocked) {
+          console.log('[MP Tools] 当前域名已加入黑名单，跳过桥接脚本所有功能');
+          return;
+        }
+      }
+    }
+  } catch (e) {
+    console.error('[MP Tools] 黑名单校验失败:', e);
+  }
+
   function isPluginsPage(): boolean {
     try {
       const hash = location.hash || '';
@@ -1132,7 +1153,33 @@
     }, true);
   }
 
-  function checkLoginSuccessAndPrompt() {
+  // ========== 黑名单检查 ==========
+  interface BlacklistEntry {
+    domain: string;
+    blockLoginFill?: boolean;
+    blockCaptchaFill?: boolean;
+  }
+
+  async function isLoginBlockedByBlacklist(): Promise<boolean> {
+    try {
+      const data = await chrome.storage.local.get(['mp.site_blacklist']);
+      const list = data['mp.site_blacklist'] as BlacklistEntry[] | undefined;
+      if (!Array.isArray(list)) return false;
+
+      const host = window.location.hostname.toLowerCase().trim().replace(/^www\./i, '');
+      const matched = list.find(entry => {
+        const ed = (entry.domain || '').toLowerCase().trim().replace(/^www\./i, '');
+        if (!ed) return false;
+        return ed === host || host.endsWith(`.${ed}`) || ed.endsWith(`.${host}`);
+      });
+
+      return matched ? matched.blockLoginFill !== false : false;
+    } catch {
+      return false;
+    }
+  }
+
+  async function checkLoginSuccessAndPrompt() {
     try {
       const storedTimeStr = sessionStorage.getItem('mp_pending_time');
       if (!storedTimeStr) return;
@@ -1150,6 +1197,10 @@
       if (domain === window.location.hostname && username && password) {
         if (!hasVisiblePasswordInput()) {
           clearPendingCreds();
+
+          const isBlocked = await isLoginBlockedByBlacklist();
+          if (isBlocked) return;
+
           chrome.runtime.sendMessage({
             type: 'MP_PT_GET_DECRYPTED_CRED',
             domain
@@ -1191,25 +1242,29 @@
 
       if (ptCredsConfig.autoFillEnabled) {
         const domain = window.location.hostname;
-        chrome.runtime.sendMessage({
-          type: 'MP_PT_GET_DECRYPTED_CRED',
-          domain
-        }, (resp) => {
-          if (resp?.success && resp.credential) {
-            const { username, password } = resp.credential;
-            fillPTCredentials(username, password);
+        isLoginBlockedByBlacklist().then(isBlocked => {
+          if (isBlocked) return;
 
-            const autofillObserver = new MutationObserver(() => {
-              if (fillPTCredentials(username, password)) {
+          chrome.runtime.sendMessage({
+            type: 'MP_PT_GET_DECRYPTED_CRED',
+            domain
+          }, (resp) => {
+            if (resp?.success && resp.credential) {
+              const { username, password } = resp.credential;
+              fillPTCredentials(username, password);
+
+              const autofillObserver = new MutationObserver(() => {
+                if (fillPTCredentials(username, password)) {
+                  autofillObserver.disconnect();
+                }
+              });
+              autofillObserver.observe(document.documentElement || document.body, { childList: true, subtree: true });
+
+              setTimeout(() => {
                 autofillObserver.disconnect();
-              }
-            });
-            autofillObserver.observe(document.documentElement || document.body, { childList: true, subtree: true });
-
-            setTimeout(() => {
-              autofillObserver.disconnect();
-            }, 10000);
-          }
+              }, 10000);
+            }
+          });
         });
       }
     });

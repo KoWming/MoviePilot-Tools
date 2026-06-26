@@ -318,13 +318,26 @@ function getPinInputs(name: string): HTMLInputElement[] {
 }
 
 function focusUnlockPinInput() {
+  const tryFocus = () => {
+    const firstInput = getPinInputs('unlock')[0];
+    if (firstInput) {
+      firstInput.focus();
+      firstInput.select();
+      return true;
+    }
+    return false;
+  };
+
   nextTick(() => {
     requestAnimationFrame(() => {
-      const firstInput = getPinInputs('unlock')[0];
-      firstInput?.focus();
-      firstInput?.select();
+      if (!tryFocus()) {
+        setTimeout(tryFocus, 50);
+      }
     });
   });
+
+  // 应对扩展弹窗加载后短暂的窗口激活延时
+  setTimeout(tryFocus, 150);
 }
 
 watch(pinLocked, (locked) => {
@@ -2933,6 +2946,10 @@ html.mobile-root, body.mobile-root, .mobile-root #app { width: 100%; height: 100
   background:
     radial-gradient(circle at top, rgba(59,130,246,0.14), transparent 34%),
     linear-gradient(180deg, #f6f9ff 0%, #ffffff 100%);
+}
+.mobile-root .pin-lock-page {
+  align-items: flex-start;
+  padding-top: 12px;
 }
 .pin-lock-card {
   width: 100%;
