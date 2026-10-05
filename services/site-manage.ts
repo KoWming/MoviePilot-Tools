@@ -23,25 +23,39 @@ import {
   expandDomainKeys,
   sessionForHost,
   hasConfiguredCookieNameMatch,
+  filterMeaningfulCookies,
+  isAuthCookieName,
   type BrowserSessionMap,
   type SetCookieResult,
 } from '../utils/cookie'
 
+function unwrapSites(data: unknown): Site[] {
+  if (Array.isArray(data)) return data as Site[]
+  if (data && typeof data === 'object') {
+    const obj = data as Record<string, unknown>
+    if (Array.isArray(obj.data)) return obj.data as Site[]
+    if (Array.isArray(obj.items)) return obj.items as Site[]
+  }
+  return []
+}
+
 export async function loadStoredSites(): Promise<Site[]> {
-  return (await getPrivateStore()).sites || []
+  const sites = (await getPrivateStore()).sites
+  return Array.isArray(sites) ? sites : []
 }
 
 async function saveStoredSites(sites: Site[]): Promise<void> {
   await updatePrivateStore((draft) => {
-    draft.sites = sites
+    draft.sites = Array.isArray(sites) ? sites : []
   })
 }
 
 export async function fetchSites(): Promise<Site[]> {
-  const res = await api.get<Site[]>('/api/v1/site/')
+  const res = await api.get<unknown>('/api/v1/site/')
   if (res.ok) {
-    await saveStoredSites(res.data || [])
-    return res.data || []
+    const sites = unwrapSites(res.data)
+    await saveStoredSites(sites)
+    return sites
   }
   return loadStoredSites()
 }
@@ -105,10 +119,23 @@ export function hasCookieDiff(serverCookie?: string, browserCookie?: string): bo
   const b = browserCookie?.trim() ?? ''
   if (!s && !b) return false
   if (!s || !b) return true
-  const sm = normalizeCookies(s)
-  const bm = normalizeCookies(b)
-  if (sm.size !== bm.size) return true
-  for (const [k, v] of sm) if (bm.get(k) !== v) return true
+
+  const sm = filterMeaningfulCookies(normalizeCookies(s))
+  const bm = filterMeaningfulCookies(normalizeCookies(b))
+
+  if (!sm.size && !bm.size) return false
+  if (!sm.size || !bm.size) return true
+
+  // 服务端配置的所有有效项在浏览器中必须存在且值一致
+  for (const [k, v] of sm) {
+    if (bm.get(k) !== v) return true
+  }
+
+  // 检查浏览器多出的项中是否包含鉴权类 Cookie（忽略前端偏好或非鉴权键）
+  for (const [k] of bm) {
+    if (!sm.has(k) && isAuthCookieName(k)) return true
+  }
+
   return false
 }
 
@@ -595,11 +622,15 @@ export async function overwriteSiteCookie(site: Site): Promise<SetCookieResult> 
 
 /** 将浏览器 Cookie/UA 同步（更新）到服务器 */
 export async function syncSiteToServer(site: Site): Promise<SiteApiOutcome> {
-  const browserUA = self.navigator?.userAgent ?? ''
+  const browserUA = globalThis.navigator?.userAgent ?? ''
   const isApi = !!(site.apikey || site.token)
+  let cookie = site.browserCookies?.trim()
+  if (!cookie) {
+    cookie = await getDomainCookies(site.url || site.domain || '')
+  }
   const updateData: Site = isApi
     ? { ...site, ua: browserUA || site.ua }
-    : { ...site, cookie: await getDomainCookies(site.url ?? ''), ua: browserUA || site.ua }
+    : { ...site, cookie: cookie || site.cookie, ua: browserUA || site.ua }
   return updateSite(updateData)
 }
 

@@ -133,7 +133,7 @@ export default defineConfig({
   },
   vite: () => ({
     define: {
-      __APP_VERSION__: JSON.stringify(process.env.npm_package_version ?? '2.0.0'),
+      __APP_VERSION__: JSON.stringify(process.env.npm_package_version ?? '2.1.0'),
     },
     resolve: {
       // ORT WASM 由构建后复制到 ocr/，offscreen 用全局 ort.min.js + wasmPaths

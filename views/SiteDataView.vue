@@ -797,9 +797,10 @@ function handleIconError(domain: string) {
 }
 
 async function loadSitesList() {
-  const list = await fetchSites()
+  const rawList = await fetchSites()
+  const list = Array.isArray(rawList) ? rawList : []
   mapping.value = Object.fromEntries(
-    list.filter((site) => site.domain && site.name).map((site) => [site.domain, site.name]),
+    list.filter((site) => site && site.domain && site.name).map((site) => [site.domain, site.name]),
   )
   // 按显示名去重，保留首个
   const unique = list.reduce((acc: Site[], current: Site) => {

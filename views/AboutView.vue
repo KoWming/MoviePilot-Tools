@@ -11,7 +11,35 @@
           在扩展中统一管理站点、下载、凭据、两步验证、智能助手与加密备份。
         </div>
       </div>
-      <div class="version">v{{ extVersion || '-' }}</div>
+      <div class="version-wrap">
+        <div
+          class="version"
+          :class="{ 'is-checking': isChecking }"
+          :title="isChecking ? '正在检查版本更新...' : '当前扩展版本，点击可重新检查更新'"
+          role="button"
+          tabindex="0"
+          @click="checkUpdate(true)"
+          @keydown.enter="checkUpdate(true)"
+        >
+          v{{ extVersion || '-' }}
+        </div>
+        <button
+          v-if="hasUpdate && latestRelease"
+          type="button"
+          class="update-badge"
+          :class="{ 'is-downloading': isDownloading }"
+          :disabled="isDownloading"
+          :title="`发现新版本 ${latestRelease.tagName}，点击一键下载更新包`"
+          @click="handleDownloadUpdate"
+        >
+          <span class="update-pulse-dot" aria-hidden="true"></span>
+          <span class="update-text">{{ isDownloading ? '下载中' : '可用更新' }}</span>
+          <span class="update-ver">{{ latestRelease.tagName }}</span>
+          <svg viewBox="0 0 24 24" width="12" height="12" class="update-icon" aria-hidden="true">
+            <path :d="mdiDownload" />
+          </svg>
+        </button>
+      </div>
     </section>
 
     <!-- 导航功能总览 -->
@@ -266,7 +294,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import {
   mdiWeb,
   mdiChartLine,
@@ -279,9 +307,65 @@ import {
   mdiCogOutline,
   mdiInformationOutline,
 } from '@mdi/js'
+import { ElMessage } from '../utils/ui'
+import {
+  fetchLatestExtensionRelease,
+  downloadExtensionUpdate,
+  isNewerVersion,
+  type ExtensionReleaseInfo,
+} from '../services/extension-update'
 
 const extVersion = ref('')
+const isChecking = ref(false)
+const isDownloading = ref(false)
+const latestRelease = ref<ExtensionReleaseInfo | null>(null)
 const logoUrl = chrome.runtime.getURL('/icons/icon.png')
+
+const hasUpdate = computed(() => {
+  if (!latestRelease.value?.version || !extVersion.value) return false
+  return isNewerVersion(latestRelease.value.version, extVersion.value)
+})
+
+async function checkUpdate(force = false) {
+  if (isChecking.value) return
+  isChecking.value = true
+  try {
+    const res = await fetchLatestExtensionRelease(force)
+    latestRelease.value = res
+    if (force) {
+      if (res && isNewerVersion(res.version, extVersion.value)) {
+        ElMessage.success(`发现可用更新 ${res.tagName}，点击即可一键下载`)
+      } else if (res) {
+        ElMessage.info('当前已是最新版本')
+      } else {
+        ElMessage.warning('未能获取版本信息，请稍后重试')
+      }
+    }
+  } catch {
+    if (force) ElMessage.error('检查更新失败，请检查网络连接')
+  } finally {
+    isChecking.value = false
+  }
+}
+
+async function handleDownloadUpdate() {
+  if (!latestRelease.value || isDownloading.value) return
+  isDownloading.value = true
+  try {
+    await downloadExtensionUpdate(latestRelease.value)
+    ElMessage.success({
+      message: `已开始高速下载 ${latestRelease.value.assetName || latestRelease.value.tagName}，解压后覆盖更新即可`,
+      duration: 4000,
+    })
+  } catch (err) {
+    ElMessage.error(err instanceof Error ? err.message : '下载失败，已为您打开发布页')
+    if (latestRelease.value.htmlUrl) {
+      window.open(latestRelease.value.htmlUrl, '_blank')
+    }
+  } finally {
+    isDownloading.value = false
+  }
+}
 
 onMounted(() => {
   try {
@@ -291,6 +375,7 @@ onMounted(() => {
   } catch {
     extVersion.value = __APP_VERSION__
   }
+  void checkUpdate(false)
 })
 
 const navItems = [
@@ -418,8 +503,15 @@ const navItems = [
   color: #64748b;
 }
 
-.version {
+.version-wrap {
   align-self: start;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 6px;
+}
+
+.version {
   padding: 3px 8px;
   border-radius: 999px;
   font-size: 11px;
@@ -428,6 +520,94 @@ const navItems = [
   background: #eef2ff;
   border: 1px solid #c7d2fe;
   white-space: nowrap;
+  cursor: pointer;
+  user-select: none;
+  transition: all 0.2s ease;
+}
+
+.version:hover {
+  background: #e0e7ff;
+  border-color: #a5b4fc;
+}
+
+.version.is-checking {
+  opacity: 0.75;
+  cursor: wait;
+}
+
+.update-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 8px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 700;
+  color: #065f46;
+  background: #ecfdf5;
+  border: 1px solid #a7f3d0;
+  white-space: nowrap;
+  cursor: pointer;
+  outline: none;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  box-shadow: 0 1px 2px rgba(16, 185, 129, 0.1);
+}
+
+.update-badge:hover:not(:disabled) {
+  background: #d1fae5;
+  border-color: #6ee7b7;
+  color: #047857;
+  transform: translateY(-1px);
+  box-shadow: 0 2px 4px rgba(16, 185, 129, 0.2);
+}
+
+.update-badge:active:not(:disabled) {
+  transform: translateY(0);
+}
+
+.update-badge.is-downloading {
+  opacity: 0.8;
+  cursor: wait;
+}
+
+.update-pulse-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background-color: #10b981;
+  box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.7);
+  animation: pulse-green 2s infinite;
+}
+
+@keyframes pulse-green {
+  0% {
+    transform: scale(0.95);
+    box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.7);
+  }
+  70% {
+    transform: scale(1);
+    box-shadow: 0 0 0 5px rgba(16, 185, 129, 0);
+  }
+  100% {
+    transform: scale(0.95);
+    box-shadow: 0 0 0 0 rgba(16, 185, 129, 0);
+  }
+}
+
+.update-text {
+  font-size: 10px;
+  font-weight: 600;
+  opacity: 0.9;
+}
+
+.update-ver {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-weight: 800;
+}
+
+.update-icon {
+  margin-left: 1px;
+  fill: currentColor;
 }
 
 /* 通用 section */
@@ -673,6 +853,25 @@ const navItems = [
   color: #a5b4fc !important;
   background: rgba(99, 102, 241, 0.15) !important;
   border-color: rgba(99, 102, 241, 0.25) !important;
+}
+
+:global(html[data-theme='dark']) .version:hover {
+  background: rgba(99, 102, 241, 0.25) !important;
+  border-color: rgba(99, 102, 241, 0.4) !important;
+}
+
+:global(html[data-theme='dark']) .update-badge {
+  color: #6ee7b7 !important;
+  background: rgba(16, 185, 129, 0.15) !important;
+  border-color: rgba(16, 185, 129, 0.3) !important;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
+}
+
+:global(html[data-theme='dark']) .update-badge:hover:not(:disabled) {
+  background: rgba(16, 185, 129, 0.25) !important;
+  border-color: rgba(16, 185, 129, 0.45) !important;
+  color: #a7f3d0 !important;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.4);
 }
 
 :global(html[data-theme='dark']) .nav-item {

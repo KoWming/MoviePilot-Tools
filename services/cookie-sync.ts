@@ -91,7 +91,7 @@ function readCookieString(domain: string): Promise<string> {
 /** 立即同步：遍历站点，将浏览器 Cookie/UA 覆盖到服务器，返回更新数量 */
 export async function syncCookieUa(_reason: 'daily' | 'interval' | 'manual' = 'manual'): Promise<number> {
   const sites = await fetchSites()
-  const ua = self.navigator?.userAgent ?? ''
+  const ua = globalThis.navigator?.userAgent ?? ''
   let updated = 0
   for (const site of sites) {
     if (!site.domain) continue

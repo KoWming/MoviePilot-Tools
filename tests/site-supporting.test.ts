@@ -59,4 +59,25 @@ describe('Supporting 数据读取', () => {
     apiGet.mockRejectedValueOnce(new Error('network'))
     await expect(fetchSupportingSites(true)).resolves.toBe(cached)
   })
+
+  it('支持 MoviePilot V3 统一响应信封并过滤信封字段', async () => {
+    apiGet.mockResolvedValueOnce({
+      ok: true,
+      data: {
+        success: true,
+        message: '',
+        data: {
+          'v3site.pt': { id: 3, name: 'V3Site' },
+        },
+      },
+    })
+    const { fetchSupportingSites } = await loadService()
+    const result = await fetchSupportingSites()
+    expect(result).toEqual({
+      'v3site.pt': { id: 3, name: 'V3Site', domain: 'v3site.pt' },
+    })
+    expect(result).not.toHaveProperty('success')
+    expect(result).not.toHaveProperty('message')
+    expect(result).not.toHaveProperty('data')
+  })
 })

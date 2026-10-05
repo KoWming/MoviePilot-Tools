@@ -34,15 +34,45 @@ function normalizeUrl(domain: string): string {
   return `https://${d}`
 }
 
-/** 读取某 URL 主机名下全部 Cookie，拼接为请求头格式字符串 */
-export function getDomainCookies(url: string): Promise<string> {
-  const host = hostnameOf(url)
-  return new Promise((resolve) => {
-    if (!host) return resolve('')
-    chrome.cookies.getAll({ domain: host }, (cookies) =>
-      resolve((cookies ?? []).map((c) => `${c.name}=${c.value}`).join('; ')),
-    )
-  })
+/** 读取某 URL 或主机名下全部 Cookie，自动结合 URL 与 Host 规则覆盖父级根域，拼接为请求头格式字符串 */
+export async function getDomainCookies(url: string): Promise<string> {
+  const trimmed = (url || '').trim()
+  if (!trimmed) return ''
+  const host = hostnameOf(trimmed) || trimmed.replace(/^https?:\/\//, '').replace(/\/.*$/, '')
+  if (!host) return ''
+
+  const targetUrl = trimmed.startsWith('http://') || trimmed.startsWith('https://')
+    ? trimmed
+    : `https://${host}/`
+
+  const [fromUrl, fromDomain] = await Promise.all([
+    new Promise<chrome.cookies.Cookie[]>((resolve) => {
+      try {
+        if (!chrome?.cookies?.getAll) return resolve([])
+        chrome.cookies.getAll({ url: targetUrl }, (c) => resolve(c ?? []))
+      } catch {
+        resolve([])
+      }
+    }),
+    new Promise<chrome.cookies.Cookie[]>((resolve) => {
+      try {
+        if (!chrome?.cookies?.getAll) return resolve([])
+        chrome.cookies.getAll({ domain: host }, (c) => resolve(c ?? []))
+      } catch {
+        resolve([])
+      }
+    }),
+  ])
+
+  const map = new Map<string, string>()
+  for (const c of fromDomain) {
+    if (c.name && c.value !== undefined) map.set(c.name, c.value)
+  }
+  for (const c of fromUrl) {
+    if (c.name && c.value !== undefined) map.set(c.name, c.value)
+  }
+
+  return [...map.entries()].map(([k, v]) => `${k}=${v}`).join('; ')
 }
 
 /** 写入结果：是否全部成功 + 失败项名称（用于精确反馈） */
@@ -195,9 +225,9 @@ export function normalizeCookies(str: string): Map<string, string> {
 
 // 鉴权会话与站点域名匹配
 
-/** CDN / 统计类 Cookie，不构成登录会话 */
+/** CDN / 统计 / 偏好类 Cookie，不构成登录会话且不应造成 CK 差异误报 */
 const NOISE_COOKIE_RE =
-  /^(cf_clearance|__cf_bm|__cflb|__cfduid|_ga|_gid|_gat|_gcl_|_fbp|_ym_|_hj|AMP_TOKEN|__utm|utm_|NID|IDE|fr$)/i
+  /^(cf_clearance|__cf_bm|__cflb|__cfduid|_ga|_gid|_gat|_gcl_|_fbp|_ym_|_hj|AMP_TOKEN|__utm|utm_|NID|IDE|fr$|^hm_lvt_|^hm_lpvt_|^_clck|^_clsk|^theme$|^skin$|^lang$|^language$|^locale$|^sidebar_)/i
 
 /** 鉴权类 Cookie 名 */
 const AUTH_COOKIE_RE =
@@ -244,6 +274,17 @@ export function cookieDomainMatchesHost(cookieDomain: string, host: string): boo
 
 export function isNoiseCookieName(name: string): boolean {
   return NOISE_COOKIE_RE.test(name.trim())
+}
+
+/** 过滤掉纯噪声/统计类 Cookie */
+export function filterMeaningfulCookies(map: Map<string, string>): Map<string, string> {
+  const result = new Map<string, string>()
+  for (const [k, v] of map) {
+    if (!isNoiseCookieName(k)) {
+      result.set(k, v)
+    }
+  }
+  return result
 }
 
 export function isAuthCookieName(name: string): boolean {

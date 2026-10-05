@@ -19,6 +19,7 @@ export const STORAGE_KEYS = {
   WEB_EMBED_FEATURES: 'virtual:webEmbed', LAST_VIEW: 'virtual:navigation.lastView', PENDING_ROUTE: 'virtual:transient.pendingRoute',
   FILE_PICKER_VIEW: 'virtual:transient.filePickerView', PT_DOWNLOAD_TITLE: 'virtual:transient.ptDownloadTitle',
   FRONTEND_LATEST_CACHE: 'virtual:cache.frontendLatest', SOFTWARE_LATEST_CACHE: 'virtual:cache.softwareLatest',
+  EXTENSION_LATEST_CACHE: 'virtual:cache.extensionLatest',
 } as const
 
 type VirtualKey = (typeof STORAGE_KEYS)[keyof typeof STORAGE_KEYS]
@@ -47,6 +48,7 @@ const PUBLIC_PATHS: Partial<Record<VirtualKey, Path>> = {
 const CACHE_NAMES: Partial<Record<VirtualKey, string>> = {
   [STORAGE_KEYS.FRONTEND_LATEST_CACHE]: 'frontendLatest',
   [STORAGE_KEYS.SOFTWARE_LATEST_CACHE]: 'softwareLatest',
+  [STORAGE_KEYS.EXTENSION_LATEST_CACHE]: 'extensionLatest',
 }
 
 function getPath(root: unknown, path: Path): unknown {

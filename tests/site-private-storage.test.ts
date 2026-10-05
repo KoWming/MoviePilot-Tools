@@ -55,6 +55,35 @@ describe('站点管理 Private Vault 存储', () => {
     expect(text).toContain('example.com')
   })
 
+  it('支持 MoviePilot V3 统一响应信封（{ success: true, data: [...] }）解包', async () => {
+    apiGet.mockResolvedValue({
+      ok: true,
+      data: {
+        success: true,
+        message: '',
+        data: [site],
+      },
+    })
+    await expect(fetchSites()).resolves.toEqual([site])
+    expect(privateStore.sites).toEqual([site])
+  })
+
+  it('接口返回非数组异常结构时优雅降级为空数组，不污染存储', async () => {
+    apiGet.mockResolvedValue({
+      ok: true,
+      data: {
+        invalid: true,
+      },
+    })
+    await expect(fetchSites()).resolves.toEqual([])
+    expect(privateStore.sites).toEqual([])
+  })
+
+  it('存储中存在旧异常非数组数据时，loadStoredSites 降级返回空数组', async () => {
+    privateStore.sites = { error: 'corrupted' } as unknown as Site[]
+    await expect(loadStoredSites()).resolves.toEqual([])
+  })
+
   it('接口失败时只从 Private Store 加载站点配置', async () => {
     privateStore.sites = [site]
     apiGet.mockResolvedValue({ ok: false, data: null })

@@ -10,7 +10,7 @@
   [![WXT](https://img.shields.io/badge/WXT-0.19-8b5cf6.svg?style=flat-square)](https://wxt.dev/)
   [![Vue 3](https://img.shields.io/badge/Vue-3.x-42b883.svg?style=flat-square)](https://vuejs.org/)
   [![TypeScript](https://img.shields.io/badge/TypeScript-5.x-3178c6.svg?style=flat-square)](https://www.typescriptlang.org/)
-  [![Version](https://img.shields.io/badge/version-2.0.0-1677ff.svg?style=flat-square)](#-当前版本)
+  [![Version](https://img.shields.io/badge/version-2.1.0-1677ff.svg?style=flat-square)](#-当前版本)
   [![License](https://img.shields.io/badge/license-GPL--3.0-green.svg?style=flat-square)](LICENSE)
 </div>
 
@@ -374,6 +374,27 @@ npm run pack:icons
 ---
 
 ## 🚀 当前版本
+
+### `v2.1.0`
+
+- **MoviePilot V3 全面适配**：
+  - 重构 API 响应解析器，全面兼容 MoviePilot V3 的 `{ success: true, data: ... }` / `{ items: ... }` 标准包装，兼顾 V2 扁平结构。
+  - 用户信息（`fetchCurrentUser`）、站点列表（`fetchSites`）及适配站点字典（`fetchSupportingSites`）自动安全解包。
+  - 站点数据统计视图强化空值容错和去重映射，防止异步异常。
+- **Cookie (CK) 检测与同步链路重构**：
+  - **双路并行抓取**：按 URL 与 Domain（Host 维度）并行读取并去重合并，彻底解决二级域名与特定路径 Cookie 漏读问题。
+  - **智能差异比对 (Diff)**：扩充统计与偏好噪声过滤清单（忽略百度统计、Clarity、主题语言偏好等），仅针对核心鉴权凭据进行比对，消除虚假变动误报。
+  - **服务端同步安全加固**：优先复用前端捕获的有效 Cookie 并做空值兜底保护；统一多环境 `globalThis.navigator.userAgent` 兼容性。
+- **扩展更新多级弹性保障链**：
+  - **MP Token 自动注入**：检查更新时自动从 MoviePilot 获取 `GITHUB_TOKEN` 鉴权，将 API 请求限流额度从 60 次/小时提升至 5000 次/小时。
+  - **403 智能冷却与防击穿**：捕获 GitHub API 限流状态，记录冷却周期，冷却期间自动跳过无效请求，避免网络消耗与控制台报错。
+  - **静态 CDN 全球免限流兜底**：当遇到 GitHub 403 限流或网络异常时，自动无缝降级至 jsDelivr CDN 镜像源读取版本，免翻墙且秒级响应。
+  - **更新包全链路镜像加速**：一键下载新版本更新包时，集成国内开源镜像加速服务，彻底解决 Release 资产国内下载缓慢与断连问题。
+- **关于页面版本交互与感知增强**：
+  - 版本标签新增更新徽章提示与动画效果，悬停即时展示最新版本信息。
+  - 接入一键下载安装包与一键访问发布页功能，支持深色模式全量适配。
+- **工程与测试体系完善**：
+  - 新增扩展更新检测、Cookie Diff 比对、用户服务 V2/V3 解包等完整单元测试，全量 242 项测试稳定通过。
 
 ### `v2.0.0`
 

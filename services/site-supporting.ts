@@ -6,6 +6,18 @@ export type SupportingDict = Record<string, SiteSupportingInfo>
 let supportingCache: SupportingDict | null = null
 let supportingRequest: Promise<SupportingDict> | null = null
 
+function unwrapSupportingData(data: unknown): Record<string, Omit<SiteSupportingInfo, 'domain'>> | null {
+  if (!data || typeof data !== 'object') return null
+  const obj = data as Record<string, unknown>
+  if (obj.data && typeof obj.data === 'object' && !Array.isArray(obj.data)) {
+    return obj.data as Record<string, Omit<SiteSupportingInfo, 'domain'>>
+  }
+  if (!Array.isArray(data)) {
+    return data as Record<string, Omit<SiteSupportingInfo, 'domain'>>
+  }
+  return null
+}
+
 /**
  * 获取已适配站点字典，并补齐每项的 canonical `domain`。
  * 成功结果在当前扩展上下文内缓存；并发请求共享同一个 Promise。
@@ -16,11 +28,14 @@ export async function fetchSupportingSites(force = false): Promise<SupportingDic
   if (supportingRequest) return supportingRequest
 
   supportingRequest = api
-    .get<Record<string, Omit<SiteSupportingInfo, 'domain'>>>('/api/v1/site/supporting')
+    .get<unknown>('/api/v1/site/supporting')
     .then((res) => {
-      if (!res.ok || !res.data) return supportingCache || {}
+      const dict = unwrapSupportingData(res.data)
+      if (!res.ok || !dict) return supportingCache || {}
       supportingCache = Object.fromEntries(
-        Object.entries(res.data).map(([domain, info]) => [domain, { ...info, domain }]),
+        Object.entries(dict)
+          .filter(([key]) => key !== 'success' && key !== 'message' && key !== 'data')
+          .map(([domain, info]) => [domain, { ...info, domain }]),
       )
       return supportingCache
     })

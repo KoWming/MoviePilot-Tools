@@ -5,8 +5,16 @@ import { appState } from '../core/state'
 import { storageGet, storageSet, STORAGE_KEYS } from '../core/storage'
 
 export async function fetchCurrentUser(): Promise<UserInfo | null> {
-  const res = await api.get<UserInfo>('/api/v1/user/current')
-  return res.ok ? res.data : null
+  const res = await api.get<unknown>('/api/v1/user/current')
+  if (!res.ok || !res.data) return null
+  if (typeof res.data === 'object' && res.data !== null) {
+    const obj = res.data as Record<string, unknown>
+    if (obj.data && typeof obj.data === 'object' && !Array.isArray(obj.data)) {
+      return obj.data as UserInfo
+    }
+    return res.data as UserInfo
+  }
+  return null
 }
 
 /** MoviePilot 用户接口支持更新用户名和邮箱。 */
