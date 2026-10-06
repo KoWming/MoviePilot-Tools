@@ -12,6 +12,7 @@ import {
   pickBestAsset,
   pickLatestRelease,
   resetRateLimitCoolDown,
+  resolveOptimalDownloadUrl,
   setMemGithubToken,
   type RawGitHubRelease,
   type ReleaseAsset,
@@ -249,7 +250,7 @@ describe('extension-update: 下载镜像加速与一键下载', () => {
   it('正确生成 GitHub 镜像加速链接，且避免重复嵌套前缀', () => {
     const raw = 'https://github.com/KoWming/MoviePilot-Tools/releases/download/v2.0.1/moviepilot.zip'
     const accelerated = getAcceleratedDownloadUrl(raw)
-    expect(accelerated).toBe('https://ghfast.top/https://github.com/KoWming/MoviePilot-Tools/releases/download/v2.0.1/moviepilot.zip')
+    expect(accelerated).toBe('https://ghproxy.net/https://github.com/KoWming/MoviePilot-Tools/releases/download/v2.0.1/moviepilot.zip')
 
     // 重复包装不叠加
     expect(getAcceleratedDownloadUrl(accelerated)).toBe(accelerated)
@@ -258,7 +259,44 @@ describe('extension-update: 下载镜像加速与一键下载', () => {
     expect(getAcceleratedDownloadUrl('https://example.com/file.zip')).toBe('https://example.com/file.zip')
   })
 
-  it('一键下载默认启用加速镜像，调用 chrome.downloads.download', async () => {
+  it('智能探测并避让 403 黑名单节点，自动选用可用镜像', async () => {
+    const raw = 'https://github.com/KoWming/MoviePilot-Tools/releases/download/v2.1.0/app.zip'
+    const mockFetch = vi.fn().mockImplementation((url: string) => {
+      // 模拟 ghproxy.net 被黑名单封禁 (403 Forbidden)
+      if (url.includes('ghproxy.net')) {
+        return Promise.resolve({ ok: false, status: 403 })
+      }
+      // 模拟 gh-proxy.com 正常响应 302/200
+      if (url.includes('gh-proxy.com')) {
+        return Promise.resolve({ ok: true, status: 200 })
+      }
+      return Promise.resolve({ ok: false, status: 500 })
+    })
+    vi.stubGlobal('fetch', mockFetch)
+
+    const result = await resolveOptimalDownloadUrl(raw, { mode: 'smart' })
+    expect(result.isMirror).toBe(true)
+    expect(result.url).toBe('https://gh-proxy.com/https://github.com/KoWming/MoviePilot-Tools/releases/download/v2.1.0/app.zip')
+  })
+
+  it('当全部加速镜像均不可用时，平滑降级为官方直连地址', async () => {
+    const raw = 'https://github.com/KoWming/MoviePilot-Tools/releases/download/v2.1.0/app.zip'
+    const mockFetch = vi.fn().mockImplementation(() => {
+      return Promise.resolve({ ok: false, status: 403 })
+    })
+    vi.stubGlobal('fetch', mockFetch)
+
+    const result = await resolveOptimalDownloadUrl(raw, { mode: 'smart' })
+    expect(result.isMirror).toBe(false)
+    expect(result.url).toBe(raw)
+  })
+
+  it('一键下载智能选用加速镜像并调用 chrome.downloads.download', async () => {
+    const mockFetch = vi.fn().mockImplementation(() => {
+      return Promise.resolve({ ok: true, status: 200 })
+    })
+    vi.stubGlobal('fetch', mockFetch)
+
     const mockDownload = vi.fn(
       (
         _options: chrome.downloads.DownloadOptions,
@@ -270,7 +308,7 @@ describe('extension-update: 下载镜像加速与一键下载', () => {
 
     vi.stubGlobal('chrome', {
       runtime: { lastError: null },
-      downloads: { download: mockDownload },
+      downloads: { download: mockDownload, onChanged: { addListener: vi.fn(), removeListener: vi.fn() } },
     })
 
     const release = {
@@ -287,7 +325,7 @@ describe('extension-update: 下载镜像加速与一键下载', () => {
     await downloadExtensionUpdate(release)
     expect(mockDownload).toHaveBeenCalledWith(
       expect.objectContaining({
-        url: 'https://ghfast.top/https://github.com/download/chrome.zip',
+        url: 'https://ghproxy.net/https://github.com/download/chrome.zip',
         filename: 'MoviePilot-tools-2.0.1-chrome.zip',
       }),
       expect.any(Function),

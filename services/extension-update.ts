@@ -41,11 +41,11 @@ export const REPO_OWNER = 'KoWming'
 export const REPO_NAME = 'MoviePilot-Tools'
 export const GITHUB_RELEASES_API = `https://api.github.com/repos/${REPO_OWNER}/${REPO_NAME}/releases?per_page=10`
 
-/** 常用 GitHub 资源加速镜像 */
+/** 常用 GitHub 资源加速镜像（已剔除黑名单与失效节点） */
 export const DEFAULT_GITHUB_MIRRORS = [
-  'https://ghfast.top/',
-  'https://mirror.ghproxy.com/',
   'https://ghproxy.net/',
+  'https://gh-proxy.com/',
+  'https://mirror.ghproxy.com/',
 ] as const
 
 /** 静态 CDN 兜底源列表（免 GitHub API Rate Limit 限制） */
@@ -111,7 +111,7 @@ export function getCurrentExtensionVersion(): string {
   } catch {
     /* 忽略非扩展上下文 */
   }
-  return typeof __APP_VERSION__ !== 'undefined' ? __APP_VERSION__ : '2.1.0'
+  return typeof __APP_VERSION__ !== 'undefined' ? __APP_VERSION__ : '2.1.1'
 }
 
 /** 规范化版本号字符串，如 'v2.0.1' -> '2.0.1' */
@@ -292,6 +292,67 @@ export function getAcceleratedDownloadUrl(
 }
 
 /**
+ * 轻量探测下载 URL 是否可用（快速 HEAD 请求）：
+ * 200~308 视为有效，403 (黑名单/Forbidden by black list)/404/5xx 或超时视为不可用。
+ */
+export async function probeDownloadUrl(url: string, timeoutMs = 2500): Promise<boolean> {
+  const { signal, clear } = createTimeoutSignal(timeoutMs)
+  try {
+    const res = await fetch(url, { method: 'HEAD', signal })
+    return res.status >= 200 && res.status < 400
+  } catch {
+    return false
+  } finally {
+    clear()
+  }
+}
+
+/**
+ * 智能选取最佳可用下载链接：
+ * 1. direct 模式或非 GitHub 链接：直接返回 rawUrl 直连；
+ * 2. smart 模式：依次探测可用加速镜像，遇到 403 黑名单或断连节点自动跳过；
+ * 3. 兜底保障：若所有镜像均不可用，自动降级回退至 rawUrl（官方直连）。
+ */
+export async function resolveOptimalDownloadUrl(
+  rawUrl: string,
+  options?: {
+    mode?: 'smart' | 'direct' | 'mirror'
+    preferredMirror?: string
+  },
+): Promise<{ url: string; isMirror: boolean; mirrorPrefix?: string }> {
+  if (!rawUrl || !rawUrl.startsWith('https://github.com/')) {
+    return { url: rawUrl, isMirror: false }
+  }
+
+  const mode = options?.mode ?? 'smart'
+  if (mode === 'direct') {
+    return { url: rawUrl, isMirror: false }
+  }
+
+  const candidateMirrors: string[] = []
+  if (options?.preferredMirror) {
+    candidateMirrors.push(options.preferredMirror)
+  }
+  for (const m of DEFAULT_GITHUB_MIRRORS) {
+    if (!candidateMirrors.includes(m)) {
+      candidateMirrors.push(m)
+    }
+  }
+
+  // 串行探测候选镜像健康度，返回首个正常响应的节点
+  for (const mirror of candidateMirrors) {
+    const target = getAcceleratedDownloadUrl(rawUrl, mirror)
+    const isOk = await probeDownloadUrl(target)
+    if (isOk) {
+      return { url: target, isMirror: true, mirrorPrefix: mirror }
+    }
+  }
+
+  // 全部镜像失效时平滑降级为直连
+  return { url: rawUrl, isMirror: false }
+}
+
+/**
  * 检查 GitHub 获取 MoviePilot-Tools 扩展最新版本。
  * 具备四重弹性链条：
  * 1. 本地智能缓存
@@ -415,25 +476,33 @@ export async function fetchLatestExtensionRelease(
 
 /**
  * 一键下载扩展更新包：
- * 支持自动镜像加速，解决国内 GitHub Release 下载慢和断连问题。
- * 优先调用 chrome.downloads.download API；若不可用或报错则回退至浏览器新标签页打开。
+ * 1. 智能解析最佳下载地址（过滤 403 黑名单与失效节点）；
+ * 2. 优先调用 chrome.downloads.download API；
+ * 3. 监听下载中断事件（如 SERVER_FORBIDDEN），在失败时自动降级回退至直连或打开发布页。
  */
 export async function downloadExtensionUpdate(
   release: ExtensionReleaseInfo,
-  options?: { useMirror?: boolean },
-): Promise<void> {
+  options?: {
+    useMirror?: boolean
+    mode?: 'smart' | 'direct' | 'mirror'
+    preferredMirror?: string
+  },
+): Promise<{ url: string; isMirror: boolean }> {
   const rawUrl = release.downloadUrl || release.htmlUrl
   if (!rawUrl) {
     throw new Error('未获取到有效的下载地址')
   }
 
-  // 默认启用加速镜像，直连若不是 github.com 或非资产文件则保持原地址
-  const useMirror = options?.useMirror ?? true
-  const targetUrl = useMirror ? getAcceleratedDownloadUrl(rawUrl) : rawUrl
+  // 1. 智能寻址：自动跳过 403 黑名单与超时镜像
+  const mode = options?.mode ?? (options?.useMirror === false ? 'direct' : 'smart')
+  const { url: targetUrl, isMirror } = await resolveOptimalDownloadUrl(rawUrl, {
+    mode,
+    preferredMirror: options?.preferredMirror,
+  })
 
-  // 若处于具备 chrome.downloads 权限的扩展环境
+  // 2. 若处于具备 chrome.downloads 权限的扩展环境
   if (typeof chrome !== 'undefined' && chrome?.downloads?.download) {
-    return new Promise<void>((resolve, reject) => {
+    return new Promise<{ url: string; isMirror: boolean }>((resolve, reject) => {
       chrome.downloads.download(
         {
           url: targetUrl,
@@ -442,22 +511,43 @@ export async function downloadExtensionUpdate(
         },
         (downloadId) => {
           if (chrome.runtime.lastError || downloadId === undefined) {
-            // 下载 API 失败时，回退到打开网页
+            // 下载 API 启动失败时回退到新窗口打开
             try {
               window.open(targetUrl, '_blank')
-              resolve()
+              resolve({ url: targetUrl, isMirror })
             } catch {
               reject(new Error(chrome.runtime.lastError?.message || '下载启动失败'))
             }
-          } else {
-            resolve()
+            return
           }
+
+          // 监听下载状态，若因 403 黑名单/网络中断失败，自动降级打开直连或 Release 页面
+          if (chrome.downloads.onChanged) {
+            const listener = (delta: chrome.downloads.DownloadDelta) => {
+              if (delta.id === downloadId && delta.state) {
+                if (delta.state.current === 'interrupted') {
+                  chrome.downloads.onChanged.removeListener(listener)
+                  // 针对 403 (SERVER_FORBIDDEN) 或其他错误回退
+                  try {
+                    window.open(release.htmlUrl || rawUrl, '_blank')
+                  } catch {
+                    // ignore
+                  }
+                } else if (delta.state.current === 'complete') {
+                  chrome.downloads.onChanged.removeListener(listener)
+                }
+              }
+            }
+            chrome.downloads.onChanged.addListener(listener)
+          }
+
+          resolve({ url: targetUrl, isMirror })
         },
       )
     })
   }
 
-  // 普通浏览器或降级：创建链接触发下载
+  // 3. 普通浏览器或降级：创建链接触发下载
   if (typeof window !== 'undefined') {
     const a = document.createElement('a')
     a.href = targetUrl
@@ -468,4 +558,6 @@ export async function downloadExtensionUpdate(
     a.click()
     document.body.removeChild(a)
   }
+
+  return { url: targetUrl, isMirror }
 }

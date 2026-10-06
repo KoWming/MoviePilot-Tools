@@ -352,13 +352,18 @@ async function handleDownloadUpdate() {
   if (!latestRelease.value || isDownloading.value) return
   isDownloading.value = true
   try {
-    await downloadExtensionUpdate(latestRelease.value)
+    const { isMirror } = await downloadExtensionUpdate(latestRelease.value)
     ElMessage.success({
-      message: `已开始高速下载 ${latestRelease.value.assetName || latestRelease.value.tagName}，解压后覆盖更新即可`,
-      duration: 4000,
+      message: isMirror
+        ? `已通过高速镜像开始下载 ${latestRelease.value.assetName || latestRelease.value.tagName}，解压后覆盖更新即可`
+        : `已开始下载 ${latestRelease.value.assetName || latestRelease.value.tagName}，解压后覆盖更新即可`,
+      duration: 4500,
     })
   } catch (err) {
-    ElMessage.error(err instanceof Error ? err.message : '下载失败，已为您打开发布页')
+    ElMessage.warning({
+      message: err instanceof Error ? `${err.message}，正在为您打开发布页` : '下载启动异常，正在为您打开发布页',
+      duration: 4500,
+    })
     if (latestRelease.value.htmlUrl) {
       window.open(latestRelease.value.htmlUrl, '_blank')
     }

@@ -10,7 +10,7 @@
   [![WXT](https://img.shields.io/badge/WXT-0.19-8b5cf6.svg?style=flat-square)](https://wxt.dev/)
   [![Vue 3](https://img.shields.io/badge/Vue-3.x-42b883.svg?style=flat-square)](https://vuejs.org/)
   [![TypeScript](https://img.shields.io/badge/TypeScript-5.x-3178c6.svg?style=flat-square)](https://www.typescriptlang.org/)
-  [![Version](https://img.shields.io/badge/version-2.1.0-1677ff.svg?style=flat-square)](#-当前版本)
+  [![Version](https://img.shields.io/badge/version-2.1.1-1677ff.svg?style=flat-square)](#-当前版本)
   [![License](https://img.shields.io/badge/license-GPL--3.0-green.svg?style=flat-square)](LICENSE)
 </div>
 
@@ -375,6 +375,24 @@ npm run pack:icons
 
 ## 🚀 当前版本
 
+### `v2.1.1`
+
+- **修复扩展安装包下载镜像 403 黑名单拦截**：
+  - 剔除 `ghfast.top` 等被黑名单拦截的第三方加速镜像节点，避免一键下载更新包报 `403 Forbidden (Forbidden by black list)` 错误。
+  - 默认重组为可靠稳定的高可用镜像源列表（`ghproxy.net`、`gh-proxy.com`、`mirror.ghproxy.com` 等）。
+- **下载节点前置健康嗅探与自适应轮换寻址**：
+  - 新增 `probeDownloadUrl` 机制，下载前使用轻量 HEAD 请求嗅探节点可用性，遇 403 黑名单、502 网关故障或请求超时毫秒级自动跳过。
+  - 新增 `resolveOptimalDownloadUrl` 策略，自动按优先级探测并匹配首个可用镜像；全部镜像失效时平滑降级官方直连源。
+- **浏览器下载中断监听与官方发布页容灾兜底**：
+  - 接入 `chrome.downloads.onChanged` 实时监听下载生命周期，若下载因网络异常、权限或拦截中断（`interrupted`），自动降级打开发布页，彻底避免卡死与静默失败。
+- **自动化测试**：
+  - 完善镜像健康嗅探、降级寻址、直连回退与下载中断容灾测试，全量 244 项测试稳定通过。
+
+<details>
+<summary><b>📜 点击展开历史版本更新说明（v2.1.0 及更早）</b></summary>
+
+<br>
+
 ### `v2.1.0`
 
 - **MoviePilot V3 全面适配**：
@@ -385,16 +403,13 @@ npm run pack:icons
   - **双路并行抓取**：按 URL 与 Domain（Host 维度）并行读取并去重合并，彻底解决二级域名与特定路径 Cookie 漏读问题。
   - **智能差异比对 (Diff)**：扩充统计与偏好噪声过滤清单（忽略百度统计、Clarity、主题语言偏好等），仅针对核心鉴权凭据进行比对，消除虚假变动误报。
   - **服务端同步安全加固**：优先复用前端捕获的有效 Cookie 并做空值兜底保护；统一多环境 `globalThis.navigator.userAgent` 兼容性。
-- **扩展更新多级弹性保障链**：
+- **扩展在线更新基础能力与关于页面交互**：
   - **MP Token 自动注入**：检查更新时自动从 MoviePilot 获取 `GITHUB_TOKEN` 鉴权，将 API 请求限流额度从 60 次/小时提升至 5000 次/小时。
   - **403 智能冷却与防击穿**：捕获 GitHub API 限流状态，记录冷却周期，冷却期间自动跳过无效请求，避免网络消耗与控制台报错。
   - **静态 CDN 全球免限流兜底**：当遇到 GitHub 403 限流或网络异常时，自动无缝降级至 jsDelivr CDN 镜像源读取版本，免翻墙且秒级响应。
-  - **更新包全链路镜像加速**：一键下载新版本更新包时，集成国内开源镜像加速服务，彻底解决 Release 资产国内下载缓慢与断连问题。
-- **关于页面版本交互与感知增强**：
-  - 版本标签新增更新徽章提示与动画效果，悬停即时展示最新版本信息。
-  - 接入一键下载安装包与一键访问发布页功能，支持深色模式全量适配。
+  - **关于页面版本交互与感知增强**：版本标签新增更新徽章提示与动画效果，悬停即时展示最新版本信息，支持一键下载与访问发布页，全面适配深色模式。
 - **工程与测试体系完善**：
-  - 新增扩展更新检测、Cookie Diff 比对、用户服务 V2/V3 解包等完整单元测试，全量 242 项测试稳定通过。
+  - 新增扩展更新检测、Cookie Diff 比对、用户服务 V2/V3 解包等完整单元测试。
 
 ### `v2.0.0`
 
@@ -405,6 +420,10 @@ npm run pack:icons
 - 完成恢复密钥、本地加密 JSON、MoviePilot 与 WebDAV 快照备份。
 - 完成本地 ONNX、MoviePilot OCR 和 AI 视觉三级验证码识别链。
 - 凭据管理支持 Bitwarden 登录凭据与 TOTP 导入，以及 PT站点、内网、自定义和用户自定义分组。
+
+> 完整语义化版本演进记录请参阅 [CHANGELOG.md](CHANGELOG.md)。
+
+</details>
 
 ---
 
